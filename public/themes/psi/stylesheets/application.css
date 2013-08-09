@@ -1,0 +1,17 @@
+/* load the default Redmine stylesheet */
+@import url(../../../stylesheets/application.css);
+
+/* add a logo in the header */
+#header {
+  background: #507AAA url(../images/psi_logo_black.png) no-repeat 8px 4px;
+  padding-left: 202px;
+}
+
+#header h1{
+  font-style: italic;
+}
+
+/* style issues by their status */
+.closed, .closed a {
+  color: #aaa;
+}
