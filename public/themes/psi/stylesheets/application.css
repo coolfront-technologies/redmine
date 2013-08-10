@@ -15,3 +15,7 @@
 .closed, .closed a {
   color: #aaa;
 }
+
+/* make sidebar a little more narrow */
+#content { width: 81%; }
+#sidebar { width: 15%; }
