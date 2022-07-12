@@ -51,6 +51,9 @@ module RedmineApp
     # Configure sensitive parameters which will be filtered from the log file.
     config.filter_parameters += [:password]
 
+    # Assets fix heroku
+    config.assets.initialize_on_precompile = false
+
     config.action_mailer.perform_deliveries = false
 
     # Do not include all helpers

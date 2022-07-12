@@ -17,11 +17,21 @@ Rails.application.configure do
   config.action_controller.perform_caching = true
 
   # Disable delivery errors
-  config.action_mailer.raise_delivery_errors = false
+  config.action_mailer.raise_delivery_errors = true
 
   # No email in production log
-  config.action_mailer.logger = nil
+  # config.action_mailer.logger = nil
 
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log
+
+  ActionMailer::Base.smtp_settings = {
+    :address        => 'smtp.sendgrid.net',
+    :port           => '587',
+    :authentication => :plain,
+    :user_name      => ENV['SENDGRID_USERNAME'],
+    :password       => ENV['SENDGRID_PASSWORD'],
+    :domain         => 'heroku.com'
+  }
+  ActionMailer::Base.delivery_method = :smtp
 end
