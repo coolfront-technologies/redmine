@@ -1,6 +1,6 @@
 source 'https://rubygems.org'
 
-ruby '>= 2.4.0', '< 2.8.0'
+ruby '2.7.6'
 gem 'bundler', '>= 1.12.0'
 
 gem 'rails', '5.2.6.3'
@@ -50,35 +50,11 @@ end
 
 # Include database gems for the adapters found in the database
 # configuration file
-require 'erb'
-require 'yaml'
-database_file = File.join(File.dirname(__FILE__), "config/database.yml")
-if File.exist?(database_file)
-  yaml_config = ERB.new(IO.read(database_file)).result
-  database_config = YAML.respond_to?(:unsafe_load) ? YAML.unsafe_load(yaml_config) : YAML.load(yaml_config)
-  adapters = database_config.values.map {|c| c['adapter']}.compact.uniq
-  if adapters.any?
-    adapters.each do |adapter|
-      case adapter
-      when 'mysql2'
-        gem "mysql2", "~> 0.5.0", :platforms => [:mri, :mingw, :x64_mingw]
-      when /postgresql/
-        gem "pg", "~> 1.2.2", :platforms => [:mri, :mingw, :x64_mingw]
-      when /sqlite3/
-        gem "sqlite3", "~> 1.4.0", :platforms => [:mri, :mingw, :x64_mingw]
-      when /sqlserver/
-        gem "tiny_tds", "~> 2.1.2", :platforms => [:mri, :mingw, :x64_mingw]
-        gem "activerecord-sqlserver-adapter", "~> 5.2.1", :platforms => [:mri, :mingw, :x64_mingw]
-      else
-        warn("Unknown database adapter `#{adapter}` found in config/database.yml, use Gemfile.local to load your own database gems")
-      end
-    end
-  else
-    warn("No adapter found in config/database.yml, please configure it first")
-  end
-else
-  warn("Please configure your config/database.yml first")
-end
+gem "pg", "~> 1.1.4", :platforms => [:mri, :mingw, :x64_mingw]
+gem "activerecord-jdbcpostgresql-adapter", :platforms => :jruby
+
+gem "mysql2", "~> 0.5.0", :platforms => [:mri, :mingw, :x64_mingw]
+gem "activerecord-jdbcmysql-adapter", :platforms => :jruby
 
 group :development do
   gem "yard"
