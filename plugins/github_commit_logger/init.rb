@@ -1,5 +1,5 @@
 require 'redmine'
-require 'journal'
+require 'journal_patch'
 
 
 Redmine::Plugin.register :github_commit_logger do
