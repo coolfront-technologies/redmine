@@ -1,5 +1,5 @@
 require 'redmine'
-require 'journal_observer'
+require 'journal'
 
 
 Redmine::Plugin.register :github_commit_logger do
@@ -7,5 +7,5 @@ Redmine::Plugin.register :github_commit_logger do
   author      'Matt Smith'
   description "When Github tries to updates an issue, create a changeset instead."
 
-  JournalObserver.send(:include, JournalObserverPatch)
+  Journal.send(:include, JournalPatch)
 end
