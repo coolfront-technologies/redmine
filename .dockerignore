@@ -1,0 +1,61 @@
+# Ignore Git files
+.git
+.gitignore
+
+# Logs
+log/*
+!log/.keep
+
+# Temp and cache files
+tmp/*
+!tmp/.keep
+
+# PID files
+*.pid
+*.seed
+*.dump
+
+# Byebug / Pry history
+.byebug_history
+.pry_history
+
+# Bundler & gems cache
+.bundle
+vendor/bundle
+node_modules
+
+# Coverage / test / artifacts
+coverage
+spec/reports
+test/tmp
+test/version_tmp
+spec/tmp
+
+# Uploaded files (if stored locally instead of S3)
+public/system
+public/uploads
+
+# Ignore editor/IDE/project files
+*.swp
+*~
+.idea
+.vscode
+*.sublime-project
+*.sublime-workspace
+
+# Ignore Docker files except Dockerfile & docker-compose
+docker-compose.override.yml
+.docker
+Dockerfile.*  # allow only root Dockerfile if you follow multiple Dockerfile convention
+
+# Ignore configs that are injected at runtime
+config/database.yml
+config/secrets.yml
+config/initializers/secret_token.rb
+
+# Ignore Gemfile.lock for plugins (already copied in Dockerfile)
+plugins/*/Gemfile.lock
+
+# Ignore other OS / system junk
+.DS_Store
+Thumbs.db
