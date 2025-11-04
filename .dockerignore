@@ -44,18 +44,4 @@ public/uploads
 *.sublime-workspace
 
 # Ignore Docker files except Dockerfile & docker-compose
-docker-compose.override.yml
-.docker
-Dockerfile.*  # allow only root Dockerfile if you follow multiple Dockerfile convention
-
-# Ignore configs that are injected at runtime
-config/database.yml
-config/secrets.yml
-config/initializers/secret_token.rb
-
-# Ignore Gemfile.lock for plugins (already copied in Dockerfile)
-plugins/*/Gemfile.lock
-
-# Ignore other OS / system junk
-.DS_Store
-Thumbs.db
+docker-c
