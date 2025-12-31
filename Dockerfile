@@ -19,11 +19,9 @@ FROM ruby:2.7.8
  RUN apt-get update && \
     apt-get install -y \
       build-essential \
-      libpq-dev \
-      libmysqlclient-dev \
+      default-libmysqlclient-dev \
       imagemagick \
       libmagickwand-dev \
-      libmagickcore-dev \
       git \
       curl \
       wget \
