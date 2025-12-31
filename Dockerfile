@@ -55,6 +55,10 @@ RUN bundle install --without development test rmagick
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
+
+# Force newer json gem compatible with Ruby 2.7
+RUN gem install json -v '2.6.3'
+
 RUN bundle install --without development test rmagick
 
 # Go back to app directory
