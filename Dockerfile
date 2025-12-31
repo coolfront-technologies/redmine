@@ -1,13 +1,13 @@
 FROM ruby:2.0
 
 # Fix outdated Jessie repositories
-RUN sed -i 's/httpredir.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
-    sed -i 's/security.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
-    sed -i '/jessie-updates/d' /etc/apt/sources.list && \
-    sed -i '/updates/d' /etc/apt/sources.list && \
-    echo 'Acquire::Check-Valid-Until "0";' > /etc/apt/apt.conf.d/99ignore-validation && \
-    echo 'Acquire::AllowInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99ignore-validation && \
-    echo 'Acquire::AllowDowngradeToInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99ignore-validation
+#RUN sed -i 's/httpredir.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
+ #   sed -i 's/security.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
+ #   sed -i '/jessie-updates/d' /etc/apt/sources.list && \
+ #   sed -i '/updates/d' /etc/apt/sources.list && \
+ #   echo 'Acquire::Check-Valid-Until "0";' > /etc/apt/apt.conf.d/99ignore-validation && \
+ #   echo 'Acquire::AllowInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99ignore-validation && \
+ #   echo 'Acquire::AllowDowngradeToInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99ignore-validation
 
 RUN apt-get update -o Acquire::AllowInsecureRepositories=true \
     -o Acquire::AllowDowngradeToInsecureRepositories=true && \
@@ -25,10 +25,11 @@ RUN apt-get update -o Acquire::AllowInsecureRepositories=true \
       lsb-release
 
 # Add PostgreSQL 12 repository and install modern libpq
-RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ jessie-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
     wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - && \
     apt-get update && \
-    apt-get install -y postgresql-client-12 libpq-dev
+    apt-get install -y postgresql-client-12 libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
