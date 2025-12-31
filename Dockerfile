@@ -1,4 +1,5 @@
-FROM ruby:2.0
+#FROM ruby:2.0
+FROM ruby:2.7.8
 
 # Fix outdated Jessie repositories
 #RUN sed -i 's/httpredir.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
@@ -9,9 +10,14 @@ FROM ruby:2.0
  #   echo 'Acquire::AllowInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99ignore-validation && \
  #   echo 'Acquire::AllowDowngradeToInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99ignore-validation
 
-RUN apt-get update -o Acquire::AllowInsecureRepositories=true \
-    -o Acquire::AllowDowngradeToInsecureRepositories=true && \
-    apt-get install -y --allow-unauthenticated \
+#RUN apt-get update -o Acquire::AllowInsecureRepositories=true \
+ #   -o Acquire::AllowDowngradeToInsecureRepositories=true && \
+ #   apt-get install -y --allow-unauthenticated \
+ #     build-essential \
+ 
+ # Install build dependencies
+ RUN apt-get update && \
+    apt-get install -y \
       build-essential \
       libpq-dev \
       libmysqlclient-dev \
