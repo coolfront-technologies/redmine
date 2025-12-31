@@ -50,15 +50,14 @@ RUN gem install bundler -v 1.17.3
 # Disable SSL verification for legacy Ruby
 RUN bundle config set --local ssl_verify_mode 0
 
+# Install compatible json first
+RUN gem install json -v 2.6.3
+
 # Install main app gems
 RUN bundle install --without development test rmagick
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
-
-# Force newer json gem compatible with Ruby 2.7
-RUN gem install json -v '2.6.3'
-
 RUN bundle install --without development test rmagick
 
 # Go back to app directory
