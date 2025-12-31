@@ -20,6 +20,15 @@ RUN apt-get update -o Acquire::AllowInsecureRepositories=true \
       libmagickcore-dev \
       git \
       curl
+      wget \
+      gnupg \
+      lsb-release
+
+# Add PostgreSQL 12 repository and install modern libpq
+RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ jessie-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+    wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - && \
+    apt-get update && \
+    apt-get install -y postgresql-client-12 libpq-dev
 
 WORKDIR /app
 
