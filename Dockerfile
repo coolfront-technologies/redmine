@@ -19,7 +19,7 @@ RUN apt-get update -o Acquire::AllowInsecureRepositories=true \
       libmagickwand-dev \
       libmagickcore-dev \
       git \
-      curl
+      curl \
       wget \
       gnupg \
       lsb-release
