@@ -43,14 +43,14 @@ ENV BUNDLE_FORCE_RUBY_PLATFORM="true"
 RUN sed -i '/gem.*mysql2/d' Gemfile && \
     sed -i '/activerecord-jdbcmysql-adapter/d' Gemfile && \
     sed -i '/gem.*ffi/d' Gemfile && \
-    rm -f Gemfile.lock
+    rm -f Gemfile.lock && \
+    find . -name "Gemfile.lock" -delete
     
 # Install main app gems (exclude MySQL gems)
 RUN bundle install
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
-RUN rm -f Gemfile.lock
 RUN bundle install --without development test rmagick
 
 # Go back to app directory
