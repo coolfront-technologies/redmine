@@ -50,23 +50,20 @@ RUN sed -i '/gem.*mysql2/d' Gemfile && \
 RUN bundle install
 
 # Create a preinitializer patch for PostgreSQL adapter
-RUN cat > config/preinitializer.rb << 'RUBY_PATCH'
-# Monkey patch PostgreSQL adapter for modern PostgreSQL compatibility
-require 'active_record/connection_adapters/postgresql_adapter'
-
-module ActiveRecord
-  module ConnectionAdapters
-    class PostgreSQLAdapter < AbstractAdapter
-      def client_min_messages=(level)
-        level = 'error' if level.to_s == 'panic'
-        execute("SET client_min_messages TO '#{level}'", 'SCHEMA')
-      end
-    end
-  end
-end
-RUBY_PATCH
-
-RUN cat config/preinitializer.rb
+RUN echo "# Monkey patch PostgreSQL adapter for modern PostgreSQL compatibility" > config/preinitializer.rb && \
+    echo "require 'active_record/connection_adapters/postgresql_adapter'" >> config/preinitializer.rb && \
+    echo "" >> config/preinitializer.rb && \
+    echo "module ActiveRecord" >> config/preinitializer.rb && \
+    echo "  module ConnectionAdapters" >> config/preinitializer.rb && \
+    echo "    class PostgreSQLAdapter < AbstractAdapter" >> config/preinitializer.rb && \
+    echo "      def client_min_messages=(level)" >> config/preinitializer.rb && \
+    echo "        level = 'error' if level.to_s == 'panic'" >> config/preinitializer.rb && \
+    echo "        execute(\"SET client_min_messages TO '\#{level}'\", 'SCHEMA')" >> config/preinitializer.rb && \
+    echo "      end" >> config/preinitializer.rb && \
+    echo "    end" >> config/preinitializer.rb && \
+    echo "  end" >> config/preinitializer.rb && \
+    echo "end" >> config/preinitializer.rb && \
+    cat config/preinitializer.rb
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
