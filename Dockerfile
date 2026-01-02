@@ -40,6 +40,7 @@ ENV BUNDLE_FORCE_RUBY_PLATFORM="true"
 # Remove MySQL gems from Gemfile
 RUN sed -i '/gem.*mysql2/d' Gemfile && \
     sed -i '/activerecord-jdbcmysql-adapter/d' Gemfile
+    sed -i '/gem.*ffi/d' Gemfile
     
 # Install main app gems (exclude MySQL gems)
 RUN bundle install
