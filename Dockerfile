@@ -23,11 +23,14 @@ RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg m
 
 WORKDIR /app
 
+# Copy everything FIRST
+COPY . .
+
 # Copy main Gemfile and Gemfile.lock
-COPY Gemfile ./
+#COPY Gemfile ./
 
 # Copy plugin Gemfile and Gemfile.lock
-COPY plugins/redmine_s3/Gemfile plugins/redmine_s3/Gemfile
+#COPY plugins/redmine_s3/Gemfile plugins/redmine_s3/Gemfile
 
 # Install Bundler
 RUN gem install bundler -v 1.17.3
@@ -39,7 +42,8 @@ ENV BUNDLE_FORCE_RUBY_PLATFORM="true"
 # Remove MySQL gems from Gemfile
 RUN sed -i '/gem.*mysql2/d' Gemfile && \
     sed -i '/activerecord-jdbcmysql-adapter/d' Gemfile && \
-    sed -i '/gem.*ffi/d' Gemfile
+    sed -i '/gem.*ffi/d' Gemfile && \
+    rm -f Gemfile.lock
     
 # Install main app gems (exclude MySQL gems)
 RUN bundle install
@@ -51,9 +55,6 @@ RUN bundle install --without development test rmagick
 
 # Go back to app directory
 WORKDIR /app
-
-# Copy the rest of your app
-COPY . .
 
 EXPOSE 3010
 CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0"]
