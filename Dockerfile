@@ -42,7 +42,7 @@ COPY Gemfile Gemfile.lock ./
 
 # Copy plugin Gemfile and Gemfile.lock
 COPY plugins/redmine_s3/Gemfile plugins/redmine_s3/Gemfile
-COPY plugins/redmine_s3/Gemfile.lock plugins/redmine_s3/Gemfile.lock
+
 
 # Install Bundler
 RUN gem install bundler -v 1.17.3
@@ -58,6 +58,7 @@ RUN bundle install --without development test rmagick
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
+RUN rm -f Gemfile.lock
 RUN bundle install --without development test rmagick
 
 # Go back to app directory
