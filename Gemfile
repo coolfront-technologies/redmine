@@ -1,8 +1,5 @@
 source 'https://rubygems.org'
 
-# Lock ffi to version compatible with Ruby 2.6
-gem 'ffi', '~> 1.15.5'
-
 gem "rails", "3.2.13"
 gem "jquery-rails", "~> 2.0.2"
 gem "i18n", "~> 0.6.0"
