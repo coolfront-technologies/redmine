@@ -46,19 +46,13 @@ RUN sed -i '/gem.*mysql2/d' Gemfile && \
     rm -f Gemfile.lock && \
     find . -name "Gemfile.lock" -delete
 
-# Fix PostgreSQL adapter for modern PostgreSQL compatibility
-RUN mkdir -p config/initializers && \
-    echo "if defined?(ActiveRecord::ConnectionAdapters::PostgreSQLAdapter)" > config/initializers/postgresql_adapter_fix.rb && \
-    echo "  ActiveRecord::ConnectionAdapters::PostgreSQLAdapter.class_eval do" >> config/initializers/postgresql_adapter_fix.rb && \
-    echo "    def client_min_messages=(level)" >> config/initializers/postgresql_adapter_fix.rb && \
-    echo "      level = 'error' if level.to_s == 'panic'" >> config/initializers/postgresql_adapter_fix.rb && \
-    echo "      execute(\"SET client_min_messages TO '#{level}'\", 'SCHEMA')" >> config/initializers/postgresql_adapter_fix.rb && \
-    echo "    end" >> config/initializers/postgresql_adapter_fix.rb && \
-    echo "  end" >> config/initializers/postgresql_adapter_fix.rb && \
-    echo "end" >> config/initializers/postgresql_adapter_fix.rb
-    
 # Install main app gems (exclude MySQL gems)
 RUN bundle install
+
+# Fix PostgreSQL adapter - patch the gem directly
+RUN sed -i "s/client_min_messages = 'panic'/client_min_messages = 'error'/g" \
+    /usr/local/bundle/gems/activerecord-3.2.13/lib/active_record/connection_adapters/postgresql_adapter.rb
+    
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
