@@ -25,7 +25,7 @@ RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg m
 WORKDIR /app
 
 # Copy main Gemfile and Gemfile.lock
-COPY Gemfile Gemfile.lock ./
+COPY Gemfile ./
 
 # Copy plugin Gemfile and Gemfile.lock
 COPY plugins/redmine_s3/Gemfile plugins/redmine_s3/Gemfile
