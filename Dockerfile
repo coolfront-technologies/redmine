@@ -5,7 +5,6 @@ FROM ruby:2.6.10
 RUN apt-get update && \
     apt-get install -y \
       build-essential \
-      libpq-dev \
       imagemagick \
       libmagickwand-dev \
       git \
@@ -39,7 +38,7 @@ ENV BUNDLE_FORCE_RUBY_PLATFORM="true"
 
 # Remove MySQL gems from Gemfile
 RUN sed -i '/gem.*mysql2/d' Gemfile && \
-    sed -i '/activerecord-jdbcmysql-adapter/d' Gemfile
+    sed -i '/activerecord-jdbcmysql-adapter/d' Gemfile && \
     sed -i '/gem.*ffi/d' Gemfile
     
 # Install main app gems (exclude MySQL gems)
