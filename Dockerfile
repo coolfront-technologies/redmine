@@ -49,10 +49,20 @@ RUN sed -i '/gem.*mysql2/d' Gemfile && \
 # Install main app gems (exclude MySQL gems)
 RUN bundle install
 
-# Fix PostgreSQL adapter - patch the gem directly
-RUN sed -i "s/client_min_messages = 'panic'/client_min_messages = 'error'/g" \
-    /usr/local/bundle/gems/activerecord-3.2.13/lib/active_record/connection_adapters/postgresql_adapter.rb
-    
+# Patch PostgreSQL adapter by modifying the source in environment.rb BEFORE Rails initializes
+RUN sed -i '3i\
+# Monkey patch PostgreSQL adapter for modern PostgreSQL compatibility\
+require "active_record/connection_adapters/postgresql_adapter"\
+module ActiveRecord::ConnectionAdapters\
+  class PostgreSQLAdapter\
+    def client_min_messages=(level)\
+      level = "error" if level.to_s == "panic"\
+      execute("SET client_min_messages TO #{quote(level)}", "SCHEMA")\
+    end\
+  end\
+end\
+' config/environment.rb && \
+    head -20 config/environment.rb
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
