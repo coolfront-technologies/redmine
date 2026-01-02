@@ -38,6 +38,7 @@ RUN gem install json -v 2.6.3
 
 # Install main app gems (exclude MySQL gems)
 RUN bundle config set --local without 'development test rmagick'
+RUN bundle update ffi
 RUN bundle install
 
 # Install plugin gems
