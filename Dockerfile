@@ -33,11 +33,15 @@ COPY plugins/redmine_s3/Gemfile plugins/redmine_s3/Gemfile
 # Install Bundler
 RUN gem install bundler -v 1.17.3
 
-# Install compatible versions first
-RUN gem install json -v 2.6.3
+# Configure bundler to skip MySQL-related gems
+ENV BUNDLE_WITHOUT="development:test:rmagick"
+ENV BUNDLE_FORCE_RUBY_PLATFORM="true"
 
+# Remove MySQL gems from Gemfile
+RUN sed -i '/gem.*mysql2/d' Gemfile && \
+    sed -i '/activerecord-jdbcmysql-adapter/d' Gemfile
+    
 # Install main app gems (exclude MySQL gems)
-RUN bundle config set --local without 'development test rmagick'
 RUN bundle update ffi
 RUN bundle install
 
