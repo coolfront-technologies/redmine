@@ -1,32 +1,19 @@
 #FROM ruby:2.0
 FROM ruby:2.6.10
 
-# Fix outdated Jessie repositories
-#RUN sed -i 's/httpredir.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
- #   sed -i 's/security.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
- #   sed -i '/jessie-updates/d' /etc/apt/sources.list && \
- #   sed -i '/updates/d' /etc/apt/sources.list && \
- #   echo 'Acquire::Check-Valid-Until "0";' > /etc/apt/apt.conf.d/99ignore-validation && \
- #   echo 'Acquire::AllowInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99ignore-validation && \
- #   echo 'Acquire::AllowDowngradeToInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99ignore-validation
-
-#RUN apt-get update -o Acquire::AllowInsecureRepositories=true \
- #   -o Acquire::AllowDowngradeToInsecureRepositories=true && \
- #   apt-get install -y --allow-unauthenticated \
- #     build-essential \
- 
- # Install build dependencies
- RUN apt-get update && \
+# Install build dependencies
+RUN apt-get update && \
     apt-get install -y \
       build-essential \
-      default-libmysqlclient-dev \
+      libpq-dev \
       imagemagick \
       libmagickwand-dev \
       git \
       curl \
       wget \
       gnupg \
-      lsb-release
+      lsb-release \
+    && rm -rf /var/lib/apt/lists/*
 
 # Add PostgreSQL 12 repository and install modern libpq
 RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
@@ -47,14 +34,18 @@ COPY plugins/redmine_s3/Gemfile plugins/redmine_s3/Gemfile
 # Install Bundler
 RUN gem install bundler -v 1.17.3
 
+# Remove Gemfile.lock to force recompilation of native extensions
+RUN rm -f Gemfile.lock
+
 # Disable SSL verification for legacy Ruby
 RUN bundle config set --local ssl_verify_mode 0
 
 # Install compatible json first
 RUN gem install json -v 2.6.3
 
-# Install main app gems
-RUN bundle install --without development test rmagick
+# Install main app gems (exclude MySQL gems)
+RUN bundle config set --local without 'development test rmagick'
+RUN bundle install
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
