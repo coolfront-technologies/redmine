@@ -30,7 +30,6 @@ COPY Gemfile Gemfile.lock ./
 # Copy plugin Gemfile and Gemfile.lock
 COPY plugins/redmine_s3/Gemfile plugins/redmine_s3/Gemfile
 
-
 # Install Bundler
 RUN gem install bundler -v 1.17.3
 
@@ -40,8 +39,9 @@ RUN rm -f Gemfile.lock
 # Disable SSL verification for legacy Ruby
 RUN bundle config set --local ssl_verify_mode 0
 
-# Install compatible json first
+# Install compatible versions first
 RUN gem install json -v 2.6.3
+RUN gem install ffi -v 1.15.5
 
 # Install main app gems (exclude MySQL gems)
 RUN bundle config set --local without 'development test rmagick'
