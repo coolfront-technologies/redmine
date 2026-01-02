@@ -42,7 +42,6 @@ RUN sed -i '/gem.*mysql2/d' Gemfile && \
     sed -i '/activerecord-jdbcmysql-adapter/d' Gemfile
     
 # Install main app gems (exclude MySQL gems)
-RUN bundle update ffi
 RUN bundle install
 
 # Install plugin gems
