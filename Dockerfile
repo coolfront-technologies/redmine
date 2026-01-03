@@ -73,4 +73,5 @@ RUN bundle install --without development test rmagick
 WORKDIR /app
 
 EXPOSE 3010
-CMD ["sh", "-c", "bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}"]
+#CMD ["sh", "-c", "bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}"]
+CMD ["sh", "-c", "echo 'Starting Rails application...' && echo 'PORT='${PORT:-3010} && echo 'DATABASE_URL='$DATABASE_URL && echo 'Checking preinitializer...' && cat config/preinitializer.rb && echo 'Running bundle exec...' && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010} 2>&1"]
