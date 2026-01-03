@@ -58,7 +58,7 @@ RUN echo "# Monkey patch PostgreSQL adapter for modern PostgreSQL compatibility"
     echo "    class PostgreSQLAdapter < AbstractAdapter" >> config/preinitializer.rb && \
     echo "      def client_min_messages=(level)" >> config/preinitializer.rb && \
     echo "        level = 'error' if level.to_s == 'panic'" >> config/preinitializer.rb && \
-    echo "        execute(\"SET client_min_messages TO '\#{level}'\", 'SCHEMA')" >> config/preinitializer.rb && \
+    echo "        execute(\"SET client_min_messages TO '#{level}'\", 'SCHEMA')" >> config/preinitializer.rb && \
     echo "      end" >> config/preinitializer.rb && \
     echo "    end" >> config/preinitializer.rb && \
     echo "  end" >> config/preinitializer.rb && \
@@ -73,4 +73,4 @@ RUN bundle install --without development test rmagick
 WORKDIR /app
 
 EXPOSE 3010
-CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0"]
+CMD ["sh", "-c", "bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}"]
