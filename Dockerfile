@@ -49,21 +49,9 @@ RUN sed -i '/gem.*mysql2/d' Gemfile && \
 # Install main app gems (exclude MySQL gems)
 RUN bundle install
 
-# Create a preinitializer patch for PostgreSQL adapter
-RUN echo "# Monkey patch PostgreSQL adapter for modern PostgreSQL compatibility" > config/preinitializer.rb && \
-    echo "require 'active_record/connection_adapters/postgresql_adapter'" >> config/preinitializer.rb && \
-    echo "" >> config/preinitializer.rb && \
-    echo "module ActiveRecord" >> config/preinitializer.rb && \
-    echo "  module ConnectionAdapters" >> config/preinitializer.rb && \
-    echo "    class PostgreSQLAdapter < AbstractAdapter" >> config/preinitializer.rb && \
-    echo "      def client_min_messages=(level)" >> config/preinitializer.rb && \
-    echo "        level = 'error' if level.to_s == 'panic'" >> config/preinitializer.rb && \
-    echo "        execute(\"SET client_min_messages TO '#{level}'\", 'SCHEMA')" >> config/preinitializer.rb && \
-    echo "      end" >> config/preinitializer.rb && \
-    echo "    end" >> config/preinitializer.rb && \
-    echo "  end" >> config/preinitializer.rb && \
-    echo "end" >> config/preinitializer.rb && \
-    cat config/preinitializer.rb
+# Patch the PostgreSQL adapter directly in the gem
+RUN sed -i "s/execute(\"SET client_min_messages TO '\#{@client_min_messages}'\")/level = @client_min_messages == 'panic' ? 'error' : @client_min_messages; execute(\"SET client_min_messages TO '\#{level}'\")/" \
+    /usr/local/bundle/gems/activerecord-3.2.13/lib/active_record/connection_adapters/postgresql_adapter.rb
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
@@ -73,5 +61,4 @@ RUN bundle install --without development test rmagick
 WORKDIR /app
 
 EXPOSE 3010
-#CMD ["sh", "-c", "bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}"]
-CMD ["sh", "-c", "echo 'Starting Rails application...' && echo 'PORT='${PORT:-3010} && echo 'DATABASE_URL='$DATABASE_URL && echo 'Checking preinitializer...' && cat config/preinitializer.rb && echo 'Running bundle exec...' && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010} 2>&1"]
+CMD ["sh", "-c", "echo 'Starting Rails application...' && echo 'PORT='${PORT:-3010} && echo 'DATABASE_URL='$DATABASE_URL && echo 'Checking preinitializer...' && cat config/preinitializer.rb && echo 'Running bundle exec...' && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010} 2>&1 || (echo 'Rails server failed with exit code:' $? && tail -100 log/production.log 2>/dev/null && sleep 30)"]
