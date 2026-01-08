@@ -51,6 +51,8 @@ RUN bundle install
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
+# Add aws-sdk gem to plugin Gemfile if not present
+RUN grep -q "aws-sdk" Gemfile 2>/dev/null || echo "gem 'aws-sdk', '~> 2.0'" >> Gemfile
 RUN bundle install --without development test rmagick
 
 # Go back to app directory
