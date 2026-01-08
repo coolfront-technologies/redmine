@@ -46,18 +46,13 @@ RUN sed -i '/gem.*mysql2/d' Gemfile && \
     rm -f Gemfile.lock && \
     find . -name "Gemfile.lock" -delete
 
-# Add aws-sdk to main Gemfile for redmine_s3 plugin
-RUN sed -i '/aws-sdk/d' Gemfile 2>/dev/null || true && \
-    echo "gem 'aws-sdk', '~> 2.0'" >> Gemfile && \
-    echo "=== Main Gemfile includes aws-sdk ===" && \
-    grep aws-sdk Gemfile
-
 # Install main app gems (exclude MySQL gems)
+# This will also install plugin gems because main Gemfile uses eval_gemfile
 RUN bundle install
 
-# Install plugin gems
+# Install plugin gems explicitly to ensure they're available
 WORKDIR /app/plugins/redmine_s3
-RUN rm -f Gemfile.lock && bundle install --without development test rmagick
+RUN bundle install --without development test rmagick
 
 # Go back to app directory
 WORKDIR /app
@@ -78,4 +73,4 @@ RUN echo "=== Finding ActiveRecord gem location ===" && \
     echo "=== Patch verification complete - SUCCESS ==="
 
 EXPOSE 3010
-CMD ["sh", "-c", "echo 'Starting Rails application...' && echo 'PORT='${PORT:-3010} && echo 'DATABASE_URL='$DATABASE_URL && echo '=== RUNTIME: Checking if patch was applied ===' && ADAPTER_FILE=$(find /usr/local/bundle/gems -name 'postgresql_adapter.rb' -path '*/activerecord-*/lib/active_record/connection_adapters/*' | head -1) && echo \"Adapter file: $ADAPTER_FILE\" && grep -n \"client_min_messages.*'error'\" \"$ADAPTER_FILE\" && echo '=== Patch IS present ===' || echo '=== WARNING: Patch NOT present! ===' && echo 'Checking preinitializer...' && cat config/preinitializer.rb && echo 'Running bundle exec...' && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010} 2>&1 || (echo 'Rails server failed with exit code:' $? && tail -100 log/production.log 2>/dev/null && sleep 30)"]
+CMD ["sh", "-c", "echo 'Starting Rails application...' && echo 'PORT='${PORT:-3010} && echo 'DATABASE_URL='$DATABASE_URL && echo '=== RUNTIME: Checking if patch was applied ===' && ADAPTER_FILE=$(find /usr/local/bundle/gems -name 'postgresql_adapter.rb' -path '*/activerecord-*/lib/active_record/connection_adapters/*' | head -1) && echo \"Adapter file: $ADAPTER_FILE\" && grep -n \"client_min_messages.*'error'\" \"$ADAPTER_FILE\" && echo '=== Patch IS present ===' || echo '=== WARNING: Patch NOT present! ===' && echo '=== Checking if AWS SDK gem is installed ===' && bundle show aws-sdk && echo '=== AWS SDK is installed ===' || echo '=== WARNING: AWS SDK NOT installed! ===' && echo 'Checking preinitializer...' && cat config/preinitializer.rb && echo 'Running bundle exec...' && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010} 2>&1 || (echo 'Rails server failed with exit code:' $? && tail -100 log/production.log 2>/dev/null && sleep 30)"]
