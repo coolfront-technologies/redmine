@@ -46,6 +46,11 @@ RUN sed -i '/gem.*mysql2/d' Gemfile && \
     rm -f Gemfile.lock && \
     find . -name "Gemfile.lock" -delete
 
+# Replace aws-sdk 2.x with aws-sdk-v1 for compatibility with old Redmine plugin
+RUN sed -i "s/gem 'aws-sdk', '~> 2.11'/gem 'aws-sdk-v1'/g" plugins/redmine_s3/Gemfile && \
+    echo "=== Updated plugin Gemfile to use aws-sdk-v1 ===" && \
+    grep aws-sdk plugins/redmine_s3/Gemfile
+
 # Install main app gems (exclude MySQL gems)
 # This will also install plugin gems because main Gemfile uses eval_gemfile
 RUN bundle install
@@ -57,16 +62,7 @@ RUN bundle install --without development test rmagick
 # Go back to app directory
 WORKDIR /app
 
-# Patch the redmine_s3 plugin to require aws-sdk with v1 compatibility
-RUN echo "=== Patching redmine_s3 plugin to require aws-sdk ===" && \
-    if [ -f plugins/redmine_s3/lib/redmine_s3/connection.rb ]; then \
-      sed -i "1irequire 'aws-sdk'\nAWS = Aws unless defined?(AWS)" plugins/redmine_s3/lib/redmine_s3/connection.rb && \
-      echo "Patched connection.rb with AWS SDK v2 compatibility" && \
-      head -10 plugins/redmine_s3/lib/redmine_s3/connection.rb; \
-    else \
-      echo "connection.rb not found - checking alternate locations"; \
-      find plugins -name "connection.rb" -type f; \
-    fi
+# No need to patch redmine_s3 plugin - aws-sdk-v1 provides AWS constant directly
 
 # Patch the PostgreSQL adapter AFTER all bundle installs are complete
 # This ensures the gem won't be reinstalled and the patch won't be lost
