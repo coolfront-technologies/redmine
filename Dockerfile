@@ -46,19 +46,18 @@ RUN sed -i '/gem.*mysql2/d' Gemfile && \
     rm -f Gemfile.lock && \
     find . -name "Gemfile.lock" -delete
 
+# Add aws-sdk to main Gemfile for redmine_s3 plugin
+RUN sed -i '/aws-sdk/d' Gemfile 2>/dev/null || true && \
+    echo "gem 'aws-sdk', '~> 2.0'" >> Gemfile && \
+    echo "=== Main Gemfile includes aws-sdk ===" && \
+    grep aws-sdk Gemfile
+
 # Install main app gems (exclude MySQL gems)
 RUN bundle install
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
-# Ensure aws-sdk gem is in Gemfile - remove existing line first, then add
-RUN sed -i '/aws-sdk/d' Gemfile 2>/dev/null || true && \
-    echo "gem 'aws-sdk', '~> 2.0'" >> Gemfile && \
-    echo "=== Plugin Gemfile contents ===" && \
-    cat Gemfile && \
-    echo "=== Installing plugin gems ===" && \
-    rm -f Gemfile.lock
-RUN bundle install --without development test rmagick
+RUN rm -f Gemfile.lock && bundle install --without development test rmagick
 
 # Go back to app directory
 WORKDIR /app
