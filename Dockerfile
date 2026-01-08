@@ -58,12 +58,18 @@ WORKDIR /app
 
 # Patch the PostgreSQL adapter AFTER all bundle installs are complete
 # This ensures the gem won't be reinstalled and the patch won't be lost
-RUN sed -i "902s/'panic'/'error'/" /usr/local/bundle/gems/activerecord-3.2.13/lib/active_record/connection_adapters/postgresql_adapter.rb
-
-# Verify the patch was applied and show the result
-RUN echo "=== Verifying PostgreSQL adapter patch ===" && \
-    grep -n "client_min_messages" /usr/local/bundle/gems/activerecord-3.2.13/lib/active_record/connection_adapters/postgresql_adapter.rb | grep -E "(error|panic)" && \
-    echo "=== Patch verification complete ==="
+RUN echo "=== Finding ActiveRecord gem location ===" && \
+    ADAPTER_FILE=$(find /usr/local/bundle/gems -name "postgresql_adapter.rb" -path "*/activerecord-*/lib/active_record/connection_adapters/*" | head -1) && \
+    echo "Found adapter at: $ADAPTER_FILE" && \
+    if [ -z "$ADAPTER_FILE" ]; then echo "ERROR: postgresql_adapter.rb not found!"; exit 1; fi && \
+    echo "=== Checking for 'panic' before patching ===" && \
+    grep -n "client_min_messages.*panic" "$ADAPTER_FILE" || echo "Warning: 'panic' not found in expected format" && \
+    echo "=== Applying patch ===" && \
+    sed -i "s/'panic'/'error'/g" "$ADAPTER_FILE" && \
+    echo "=== Verifying patch was applied ===" && \
+    grep -n "client_min_messages" "$ADAPTER_FILE" | grep -E "(error|panic)" && \
+    if grep -q "'panic'" "$ADAPTER_FILE"; then echo "ERROR: Patch failed - 'panic' still present!"; exit 1; fi && \
+    echo "=== Patch verification complete - SUCCESS ==="
 
 EXPOSE 3010
 CMD ["sh", "-c", "echo 'Starting Rails application...' && echo 'PORT='${PORT:-3010} && echo 'DATABASE_URL='$DATABASE_URL && echo 'Checking preinitializer...' && cat config/preinitializer.rb && echo 'Running bundle exec...' && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010} 2>&1 || (echo 'Rails server failed with exit code:' $? && tail -100 log/production.log 2>/dev/null && sleep 30)"]
