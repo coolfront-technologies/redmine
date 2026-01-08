@@ -49,20 +49,21 @@ RUN sed -i '/gem.*mysql2/d' Gemfile && \
 # Install main app gems (exclude MySQL gems)
 RUN bundle install
 
-# Patch the PostgreSQL adapter directly in the gem - change 'panic' to 'error' on line 902
-RUN sed -i "902s/'panic'/'error'/" /usr/local/bundle/gems/activerecord-3.2.13/lib/active_record/connection_adapters/postgresql_adapter.rb
-
-# Verify the patch was applied
-RUN grep -n "client_min_messages.*'error'" /usr/local/bundle/gems/activerecord-3.2.13/lib/active_record/connection_adapters/postgresql_adapter.rb || \
-    echo "WARNING: Could not verify patch - checking full file" && \
-    grep -A2 -B2 "client_min_messages" /usr/local/bundle/gems/activerecord-3.2.13/lib/active_record/connection_adapters/postgresql_adapter.rb
-
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
 RUN bundle install --without development test rmagick
 
 # Go back to app directory
 WORKDIR /app
+
+# Patch the PostgreSQL adapter AFTER all bundle installs are complete
+# This ensures the gem won't be reinstalled and the patch won't be lost
+RUN sed -i "902s/'panic'/'error'/" /usr/local/bundle/gems/activerecord-3.2.13/lib/active_record/connection_adapters/postgresql_adapter.rb
+
+# Verify the patch was applied and show the result
+RUN echo "=== Verifying PostgreSQL adapter patch ===" && \
+    grep -n "client_min_messages" /usr/local/bundle/gems/activerecord-3.2.13/lib/active_record/connection_adapters/postgresql_adapter.rb | grep -E "(error|panic)" && \
+    echo "=== Patch verification complete ==="
 
 EXPOSE 3010
 CMD ["sh", "-c", "echo 'Starting Rails application...' && echo 'PORT='${PORT:-3010} && echo 'DATABASE_URL='$DATABASE_URL && echo 'Checking preinitializer...' && cat config/preinitializer.rb && echo 'Running bundle exec...' && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010} 2>&1 || (echo 'Rails server failed with exit code:' $? && tail -100 log/production.log 2>/dev/null && sleep 30)"]
