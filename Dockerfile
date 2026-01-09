@@ -85,13 +85,8 @@ RUN echo "=== Finding ActiveRecord gem location ===" && \
     if grep -q "'panic'" "$ADAPTER_FILE"; then echo "ERROR: Patch failed - 'panic' still present!"; exit 1; fi && \
     echo "=== Patch verification complete - SUCCESS ==="
 
-# Patch the Setting model to fix YAML serialization issues
-# We need to add a check BEFORE line 171 to handle Integer values
-RUN echo "=== Patching Setting model for YAML compatibility ===" && \
-    sed -i '171i\      value = read_attribute(:value); return value if value.is_a?(Integer) || value.is_a?(Numeric)' app/models/setting.rb && \
-    echo "Setting model patched" && \
-    echo "Lines around patch:" && \
-    sed -n '168,174p' app/models/setting.rb
+# Setting model fix is already in the source code (commit 258be461d)
+# No need for runtime patching
 
 # Create startup script to generate database.yml at runtime
 RUN echo '#!/bin/sh' > /start.sh && \
