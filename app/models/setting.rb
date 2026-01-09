@@ -92,13 +92,15 @@ class Setting < ActiveRecord::Base
   def value
     v = read_attribute(:value)
     # Unserialize serialized settings
-    v = YAML::load(v) if @@available_settings[name]['serialized'] && v.is_a?(String)
-    v = v.to_sym if @@available_settings[name]['format'] == 'symbol' && !v.blank?
+    setting_name = self.name || read_attribute(:name)
+    v = YAML::load(v) if setting_name && @@available_settings[setting_name] && @@available_settings[setting_name]['serialized'] && v.is_a?(String)
+    v = v.to_sym if setting_name && @@available_settings[setting_name] && @@available_settings[setting_name]['format'] == 'symbol' && !v.blank?
     v
   end
 
   def value=(v)
-    v = v.to_yaml if v && @@available_settings[name] && @@available_settings[name]['serialized']
+    setting_name = self.name || read_attribute(:name)
+    v = v.to_yaml if v && setting_name && @@available_settings[setting_name] && @@available_settings[setting_name]['serialized']
     write_attribute(:value, v.to_s)
   end
 
