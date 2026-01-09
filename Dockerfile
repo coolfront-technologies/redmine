@@ -96,6 +96,8 @@ RUN echo '#!/bin/sh' > /start.sh && \
     echo 'DBEOF' >> /start.sh && \
     echo 'echo "Running database migrations..."' >> /start.sh && \
     echo 'bundle exec rake db:migrate RAILS_ENV=production' >> /start.sh && \
+    echo 'echo "Loading default data..."' >> /start.sh && \
+    echo 'bundle exec rake redmine:load_default_data RAILS_ENV=production REDMINE_LANG=en 2>&1 | grep -v "already exists" || true' >> /start.sh && \
     echo 'echo "Starting Rails server..."' >> /start.sh && \
     echo 'bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}' >> /start.sh && \
     chmod +x /start.sh
