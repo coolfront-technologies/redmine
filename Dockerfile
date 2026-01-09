@@ -86,4 +86,4 @@ RUN echo "=== Finding ActiveRecord gem location ===" && \
     echo "=== Patch verification complete - SUCCESS ==="
 
 EXPOSE 3010
-CMD ["sh", "-c", "export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}} && echo 'Running database migrations...' && bundle exec rake db:migrate RAILS_ENV=production && echo 'Generating secret token if needed...' && bundle exec rake generate_secret_token RAILS_ENV=production 2>/dev/null || true && echo 'Starting Rails server...' && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}"]
+CMD ["sh", "-c", "export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}} && echo 'Creating database.yml from DATABASE_URL...' && cat > config/database.yml <<EOF\nproduction:\n  adapter: postgresql\n  encoding: unicode\n  url: <%= ENV['DATABASE_URL'] %>\nEOF\n && echo 'Running database migrations...' && bundle exec rake db:migrate RAILS_ENV=production && echo 'Starting Rails server...' && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}"]
