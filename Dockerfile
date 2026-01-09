@@ -85,5 +85,20 @@ RUN echo "=== Finding ActiveRecord gem location ===" && \
     if grep -q "'panic'" "$ADAPTER_FILE"; then echo "ERROR: Patch failed - 'panic' still present!"; exit 1; fi && \
     echo "=== Patch verification complete - SUCCESS ==="
 
+# Create startup script to generate database.yml at runtime
+RUN echo '#!/bin/sh' > /start.sh && \
+    echo 'export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}}' >> /start.sh && \
+    echo 'cat > config/database.yml <<DBEOF' >> /start.sh && \
+    echo 'production:' >> /start.sh && \
+    echo '  adapter: postgresql' >> /start.sh && \
+    echo '  encoding: unicode' >> /start.sh && \
+    echo '  url: <%= ENV["DATABASE_URL"] %>' >> /start.sh && \
+    echo 'DBEOF' >> /start.sh && \
+    echo 'echo "Running database migrations..."' >> /start.sh && \
+    echo 'bundle exec rake db:migrate RAILS_ENV=production' >> /start.sh && \
+    echo 'echo "Starting Rails server..."' >> /start.sh && \
+    echo 'bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}' >> /start.sh && \
+    chmod +x /start.sh
+
 EXPOSE 3010
-CMD ["sh", "-c", "export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}} && printf 'production:\\n  adapter: postgresql\\n  encoding: unicode\\n  url: <%= ENV[\"DATABASE_URL\"] %>\\n' > config/database.yml && echo 'Running database migrations...' && bundle exec rake db:migrate RAILS_ENV=production && echo 'Starting Rails server...' && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}"]
+CMD ["/start.sh"]
