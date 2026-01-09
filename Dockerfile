@@ -85,6 +85,12 @@ RUN echo "=== Finding ActiveRecord gem location ===" && \
     if grep -q "'panic'" "$ADAPTER_FILE"; then echo "ERROR: Patch failed - 'panic' still present!"; exit 1; fi && \
     echo "=== Patch verification complete - SUCCESS ==="
 
+# Patch the Setting model to fix YAML serialization issues
+RUN echo "=== Patching Setting model for YAML compatibility ===" && \
+    sed -i '171s/.*/      default_value = read_attribute(:value) rescue nil; return default_value if default_value.is_a?(Integer); b.accept(read_attribute(:value))/' app/models/setting.rb && \
+    echo "Setting model patched" && \
+    head -175 app/models/setting.rb | tail -10
+
 # Create startup script to generate database.yml at runtime
 RUN echo '#!/bin/sh' > /start.sh && \
     echo 'export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}}' >> /start.sh && \
