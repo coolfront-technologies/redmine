@@ -86,4 +86,4 @@ RUN echo "=== Finding ActiveRecord gem location ===" && \
     echo "=== Patch verification complete - SUCCESS ==="
 
 EXPOSE 3010
-CMD ["sh", "-c", "echo 'Environment check:' && env | grep -E '(SECRET_TOKEN|SECRET_KEY_BASE|DATABASE_URL|PORT)' && export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}} && echo 'Starting Rails...' && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}"]
+CMD ["sh", "-c", "export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}} && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}"]
