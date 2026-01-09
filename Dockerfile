@@ -62,7 +62,13 @@ RUN bundle install --without development test rmagick
 # Go back to app directory
 WORKDIR /app
 
-# No need to patch redmine_s3 plugin - aws-sdk-v1 provides AWS constant directly
+# Patch redmine_s3 plugin to use correct require for aws-sdk-v1
+RUN echo "=== Patching redmine_s3 plugin to use aws-sdk-v1 require ===" && \
+    if [ -f plugins/redmine_s3/lib/redmine_s3/connection.rb ]; then \
+      sed -i "s/require 'aws-sdk'/require 'aws-sdk-v1'/" plugins/redmine_s3/lib/redmine_s3/connection.rb && \
+      echo "Patched connection.rb" && \
+      head -5 plugins/redmine_s3/lib/redmine_s3/connection.rb; \
+    fi
 
 # Patch the PostgreSQL adapter AFTER all bundle installs are complete
 # This ensures the gem won't be reinstalled and the patch won't be lost
