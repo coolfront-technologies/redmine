@@ -86,10 +86,12 @@ RUN echo "=== Finding ActiveRecord gem location ===" && \
     echo "=== Patch verification complete - SUCCESS ==="
 
 # Patch the Setting model to fix YAML serialization issues
+# We need to add a check BEFORE line 171 to handle Integer values
 RUN echo "=== Patching Setting model for YAML compatibility ===" && \
-    sed -i '171s/.*/      default_value = read_attribute(:value) rescue nil; return default_value if default_value.is_a?(Integer); b.accept(read_attribute(:value))/' app/models/setting.rb && \
+    sed -i '171i\      value = read_attribute(:value); return value if value.is_a?(Integer) || value.is_a?(Numeric)' app/models/setting.rb && \
     echo "Setting model patched" && \
-    head -175 app/models/setting.rb | tail -10
+    echo "Lines around patch:" && \
+    sed -n '168,174p' app/models/setting.rb
 
 # Create startup script to generate database.yml at runtime
 RUN echo '#!/bin/sh' > /start.sh && \
