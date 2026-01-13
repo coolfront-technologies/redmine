@@ -100,7 +100,7 @@ class Setting < ActiveRecord::Base
 
   def value=(v)
     setting_name = self.name || read_attribute(:name)
-    v = v.to_yaml if v && setting_name && @@available_settings[setting_name] && @@available_settings[setting_name]['serialized']
+    v = YAML.dump(v) if v && setting_name && @@available_settings[setting_name] && @@available_settings[setting_name]['serialized']
     write_attribute(:value, v.to_s)
   end
 
