@@ -100,9 +100,9 @@ RUN echo '#!/bin/sh' > /start.sh && \
     echo 'echo "Running database migrations..."' >> /start.sh && \
     echo 'bundle exec rake db:migrate RAILS_ENV=production' >> /start.sh && \
     echo 'echo "Initializing Redmine..."' >> /start.sh && \
-    echo 'RAILS_ENV=production bundle exec rails runner "Setting.create(name: \"rest_api_enabled\", value: \"1\") if Setting.where(name: \"rest_api_enabled\").empty?"' >> /start.sh && \
+    echo 'RAILS_ENV=production bundle exec rails runner "begin; Setting.create(name: \"rest_api_enabled\", value: \"1\") if Setting.where(name: \"rest_api_enabled\").empty?; rescue => e; puts \"ERROR during Setting initialization: #{e.class}: #{e.message}\"; puts e.backtrace.first(10); raise; end"' >> /start.sh && \
     echo 'echo "Starting Rails server..."' >> /start.sh && \
-    echo 'bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}' >> /start.sh && \
+    echo 'exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010} 2>&1' >> /start.sh && \
     chmod +x /start.sh
 
 EXPOSE 3010
