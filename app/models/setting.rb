@@ -101,7 +101,8 @@ class Setting < ActiveRecord::Base
   def value=(v)
     setting_name = self.name || read_attribute(:name)
     if v && setting_name && @@available_settings[setting_name] && @@available_settings[setting_name]['serialized']
-      v = v.to_yaml if v
+      # Only serialize if not already a string
+      v = YAML.dump(v) unless v.is_a?(String)
     end
     write_attribute(:value, v.to_s)
   end
