@@ -88,6 +88,10 @@ RUN echo "=== Finding ActiveRecord gem location ===" && \
 # Setting model fix is already in the source code (commit 258be461d)
 # No need for runtime patching
 
+# Ensure log directory exists and redirect logs to stdout
+RUN mkdir -p log && \
+    ln -sf /dev/stdout log/production.log
+
 # Create startup script to generate database.yml at runtime
 RUN echo '#!/bin/sh' > /start.sh && \
     echo 'export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}}' >> /start.sh && \
