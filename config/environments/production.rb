@@ -4,6 +4,10 @@ RedmineApp::Application.configure do
   # Code is not reloaded between requests
   config.cache_classes = true
 
+  # Log to STDOUT for Docker/Azure
+  config.logger = Logger.new(STDOUT)
+  config.logger.level = Logger::INFO
+
   #####
   # Customize the default logger (http://ruby-doc.org/core/classes/Logger.html)
   #
