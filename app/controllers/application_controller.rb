@@ -40,6 +40,7 @@ class ApplicationController < ActionController::Base
 
   before_filter :session_expiration, :user_setup, :check_if_login_required, :set_localization
 
+  rescue_from StandardError, :with => :render_error
   rescue_from ActionController::InvalidAuthenticityToken, :with => :invalid_authenticity_token
   rescue_from ::Unauthorized, :with => :deny_access
   rescue_from ::ActionView::MissingTemplate, :with => :missing_template
@@ -603,5 +604,16 @@ class ApplicationController < ActionController::Base
   # doesn't use the layout for api requests
   def _include_layout?(*args)
     api_request? ? false : super
+  end
+
+  def render_error(exception)
+    puts "="*80
+    puts "ERROR: #{exception.class}: #{exception.message}"
+    puts exception.backtrace.first(20).join("\n")
+    puts "="*80
+    STDOUT.flush
+    logger.error "#{exception.class}: #{exception.message}"
+    logger.error exception.backtrace.first(20).join("\n")
+    render_500
   end
 end
