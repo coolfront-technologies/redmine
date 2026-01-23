@@ -616,4 +616,11 @@ class ApplicationController < ActionController::Base
     logger.error exception.backtrace.first(20).join("\n")
     render_500
   end
+
+  def render_500
+    respond_to do |format|
+      format.html { render :template => 'errors/500', :status => 500 }
+      format.any  { head 500 }
+    end
+  end
 end

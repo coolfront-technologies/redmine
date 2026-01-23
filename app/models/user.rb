@@ -178,7 +178,10 @@ class User < Principal
         end
       end
     end
-    user.update_column(:last_login_on, Time.now) if user && !user.new_record?
+    if user && !user.new_record?
+      Rails.logger.info("DEBUG: Calling update_column(:last_login_on, Time.now) for user id={user.id}")
+      user.update_column(:last_login_on, Time.now)
+    end
     user
   rescue => text
     raise text
@@ -188,6 +191,7 @@ class User < Principal
   def self.try_to_autologin(key)
     user = Token.find_active_user('autologin', key, Setting.autologin.to_i)
     if user
+      Rails.logger.info("DEBUG: Calling update_column(:last_login_on, Time.now) for user id={user.id}")
       user.update_column(:last_login_on, Time.now)
       user
     end
@@ -322,8 +326,12 @@ class User < Principal
   end
 
   def notified_project_ids=(ids)
+    Rails.logger.info("DEBUG: Member.update_all with quoted_false for user_id={id}")
     Member.update_all("mail_notification = #{connection.quoted_false}", ['user_id = ?', id])
-    Member.update_all("mail_notification = #{connection.quoted_true}", ['user_id = ? AND project_id IN (?)', id, ids]) if ids && !ids.empty?
+    if ids && !ids.empty?
+      Rails.logger.info("DEBUG: Member.update_all with quoted_true for user_id={id}, project_ids={ids}")
+      Member.update_all("mail_notification = #{connection.quoted_true}", ['user_id = ? AND project_id IN (?)', id, ids])
+    end
     @notified_projects_ids = nil
     notified_projects_ids
   end
@@ -615,6 +623,7 @@ class User < Principal
         next if user.hashed_password.blank?
         salt = User.generate_salt
         hashed_password = User.hash_password("#{salt}#{user.hashed_password}")
+        Rails.logger.info("DEBUG: User.update_all salt/hashed_password for user_id={user.id}")
         User.where(:id => user.id).update_all(:salt => salt, :hashed_password => hashed_password)
       end
     end
@@ -637,22 +646,35 @@ class User < Principal
     return if self.id.nil?
 
     substitute = User.anonymous
+    Rails.logger.info("DEBUG: Attachment.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     Attachment.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
+    Rails.logger.info("DEBUG: Comment.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     Comment.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
+    Rails.logger.info("DEBUG: Issue.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     Issue.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
+    Rails.logger.info("DEBUG: Issue.update_all assigned_to_id=NULL for user_id={id}")
     Issue.update_all 'assigned_to_id = NULL', ['assigned_to_id = ?', id]
+    Rails.logger.info("DEBUG: Journal.update_all user_id for substitute_id={substitute.id}, user_id={id}")
     Journal.update_all ['user_id = ?', substitute.id], ['user_id = ?', id]
+    Rails.logger.info("DEBUG: JournalDetail.update_all old_value for substitute_id={substitute.id}, user_id={id}")
     JournalDetail.update_all ['old_value = ?', substitute.id.to_s], ["property = 'attr' AND prop_key = 'assigned_to_id' AND old_value = ?", id.to_s]
+    Rails.logger.info("DEBUG: JournalDetail.update_all value for substitute_id={substitute.id}, user_id={id}")
     JournalDetail.update_all ['value = ?', substitute.id.to_s], ["property = 'attr' AND prop_key = 'assigned_to_id' AND value = ?", id.to_s]
+    Rails.logger.info("DEBUG: Message.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     Message.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
+    Rails.logger.info("DEBUG: News.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     News.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
     # Remove private queries and keep public ones
     ::Query.delete_all ['user_id = ? AND is_public = ?', id, false]
+    Rails.logger.info("DEBUG: Query.update_all user_id for substitute_id={substitute.id}, user_id={id}")
     ::Query.update_all ['user_id = ?', substitute.id], ['user_id = ?', id]
+    Rails.logger.info("DEBUG: TimeEntry.update_all user_id for substitute_id={substitute.id}, user_id={id}")
     TimeEntry.update_all ['user_id = ?', substitute.id], ['user_id = ?', id]
     Token.delete_all ['user_id = ?', id]
     Watcher.delete_all ['user_id = ?', id]
+    Rails.logger.info("DEBUG: WikiContent.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     WikiContent.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
+    Rails.logger.info("DEBUG: WikiContent::Version.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     WikiContent::Version.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
   end
 
