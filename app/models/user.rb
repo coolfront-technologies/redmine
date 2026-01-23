@@ -179,7 +179,8 @@ class User < Principal
       end
     end
     if user && !user.new_record?
-      Rails.logger.info("DEBUG: Calling update_column(:last_login_on, Time.now) for user id={user.id}")
+        Rails.logger.info("DEBUG: user.class=#{user.class}, user.id=#{user.try(:id)}")
+        Rails.logger.info("DEBUG: Calling update_column(:last_login_on, Time.now) for user id=#{user.id}")
       user.update_column(:last_login_on, Time.now)
     end
     user
@@ -191,7 +192,8 @@ class User < Principal
   def self.try_to_autologin(key)
     user = Token.find_active_user('autologin', key, Setting.autologin.to_i)
     if user
-      Rails.logger.info("DEBUG: Calling update_column(:last_login_on, Time.now) for user id={user.id}")
+        Rails.logger.info("DEBUG: user.class=#{user.class}, user.id=#{user.try(:id)}")
+        Rails.logger.info("DEBUG: Calling update_column(:last_login_on, Time.now) for user id=#{user.id}")
       user.update_column(:last_login_on, Time.now)
       user
     end
