@@ -2,9 +2,6 @@
 RedmineApp::Application.configure do
 
   
-  # Trust all proxies (needed for Azure, load balancers, etc.)
-  config.action_dispatch.trusted_proxies = [IPAddr.new("0.0.0.0/0")]
-  
   # The production environment is meant for finished, "live" apps.
   # Code is not reloaded between requests
   config.cache_classes = true
