@@ -221,13 +221,17 @@ class AccountController < ApplicationController
   def successful_authentication(user)
     logger.info "Successful authentication for '#{user.login}' from #{request.remote_ip} at #{Time.now.utc}"
     # Valid user
-    self.logged_user = user
-    # generate a key and set cookie if autologin
-    if params[:autologin] && Setting.autologin?
-      set_autologin_cookie(user)
+    begin
+      self.logged_user = user
+      # generate a key and set cookie if autologin
+      if params[:autologin] && Setting.autologin?
+        set_autologin_cookie(user)
+      end
+      call_hook(:controller_account_success_authentication_after, {:user => user })
+      redirect_back_or_default my_page_path
+    rescue => e
+      logger.info "Jagan Logs for after login #{e}"
     end
-    call_hook(:controller_account_success_authentication_after, {:user => user })
-    redirect_back_or_default my_page_path
   end
 
   def set_autologin_cookie(user)
