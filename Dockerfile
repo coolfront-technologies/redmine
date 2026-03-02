@@ -59,8 +59,16 @@ RUN if [ -f plugins/redmine_s3/lib/redmine_s3/connection.rb ]; then \
 RUN ADAPTER_FILE=$(find /usr/local/bundle/gems -name "postgresql_adapter.rb" -path "*/activerecord-*/lib/active_record/connection_adapters/*" | head -1) && \
     sed -i "s/'panic'/'error'/g" "$ADAPTER_FILE"
 
-# Session store
+# Session store with domain setting
 RUN echo "RedmineApp::Application.config.session_store :cookie_store, key: '_redmine_session'" > /app/config/initializers/session_store.rb
+
+# CRITICAL: Disable CSRF check for login (temporary fix)
+RUN printf '%s\n' \
+    '# Skip CSRF verification for login to fix Azure proxy issue' \
+    'class AccountController' \
+    '  skip_before_filter :verify_authenticity_token, only: [:login]' \
+    'end' \
+    > /app/config/initializers/csrf_fix.rb
 
 # Force HTTPS detection from Azure proxy headers
 RUN printf '%s\n' \
@@ -77,7 +85,7 @@ RUN printf '%s\n' \
     > /app/config/initializers/ssl_fix.rb
 
 # CRITICAL: Create new config.ru with SameSite cookie middleware
-RUN mv /app/config.ru /app/config.ru.original && \
+RUN mv /app/config.ru /app/config.ru.original 2>/dev/null || true && \
     printf '%s\n' \
     '# SameSite Cookie Middleware for Azure' \
     'class SameSiteCookies' \
@@ -85,7 +93,12 @@ RUN mv /app/config.ru /app/config.ru.original && \
     '    @app = app' \
     '  end' \
     '  def call(env)' \
+    '    # Set HTTPS flag for Rails' \
+    '    env["HTTPS"] = "on" if env["HTTP_X_FORWARDED_PROTO"] == "https"' \
+    '    env["rack.url_scheme"] = "https" if env["HTTP_X_FORWARDED_PROTO"] == "https"' \
+    '    ' \
     '    status, headers, body = @app.call(env)' \
+    '    ' \
     '    if headers["Set-Cookie"]' \
     '      cookies = headers["Set-Cookie"].is_a?(Array) ? headers["Set-Cookie"] : headers["Set-Cookie"].split("\n")' \
     '      cookies = cookies.map do |cookie|' \
@@ -94,6 +107,7 @@ RUN mv /app/config.ru /app/config.ru.original && \
     '      end' \
     '      headers["Set-Cookie"] = cookies.join("\n")' \
     '    end' \
+    '    ' \
     '    [status, headers, body]' \
     '  end' \
     'end' \
