@@ -10,5 +10,11 @@ require File.expand_path('../application', __FILE__)
 #   exit 1
 # end
 
+# Force SSL and trust proxy headers
+Redmine::Application.configure do
+  config.force_ssl = false  # Azure handles SSL termination
+  config.action_controller.forgery_protection_origin_check = false
+end
+
 # Initialize the rails application
 RedmineApp::Application.initialize!
