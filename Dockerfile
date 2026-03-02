@@ -6,16 +6,21 @@ RUN sed -i 's|deb.debian.org|archive.debian.org|g' /etc/apt/sources.list && \
     sed -i '/stretch-updates/d' /etc/apt/sources.list && \
     echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99ignore-validation
 
-RUN apt-get update -o Acquire::Check-Valid-Until=false && \
-    apt-get install -y --allow-unauthenticated \
+RUN apt-get update && apt-get install -y \
       build-essential \
       libpq-dev \
-      default-libmysqlclient-dev \
-      imagemagick \
+      libxml2-dev \
+      libxslt1-dev \
       libmagickwand-dev \
       libmagickcore-dev \
       git \
-      curl && \
+      curl \
+      gnupg2 && \
+    # Add PostgreSQL apt repository for newer libpq
+    echo "deb http://apt.postgresql.org/pub/repos/apt/ stretch-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - && \
+    apt-get update && \
+    apt-get install -y libpq5 libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
