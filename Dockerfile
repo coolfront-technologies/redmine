@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --allow-unauthenticated \
       git \
       wget
 
-# Download and install newer libpq manually
+# Download and install newer libpq manually (version 12 supports SCRAM)
 RUN wget --no-check-certificate https://ftp.postgresql.org/pub/source/v12.18/postgresql-12.18.tar.gz && \
     tar -xzf postgresql-12.18.tar.gz && \
     cd postgresql-12.18 && \
@@ -32,6 +32,10 @@ RUN wget --no-check-certificate https://ftp.postgresql.org/pub/source/v12.18/pos
     make -C src/include install && \
     cd .. && rm -rf postgresql-12.18 postgresql-12.18.tar.gz && \
     ldconfig
+
+# Set environment variables so pg gem finds the new libpq
+ENV PATH="/usr/local/pgsql/bin:$PATH"
+ENV LD_LIBRARY_PATH="/usr/local/pgsql/lib:$LD_LIBRARY_PATH"
 
 WORKDIR /app
 
@@ -46,8 +50,15 @@ RUN gem install bundler -v 1.17.3
 # Disable SSL verification (Ruby 2.3 + modern SSL workaround)
 RUN bundle config set --local ssl_verify_mode 0
 
+# Configure bundler to use the new pg_config for building pg gem
+RUN bundle config build.pg --with-pg-config=/usr/local/pgsql/bin/pg_config
+
 # Install main app gems
 RUN bundle install --without development test rmagick
+
+# Force rebuild of pg gem with the new libpq
+RUN gem uninstall pg -a -x --force || true && \
+    gem install pg -v "$(grep "pg (" Gemfile.lock | head -1 | sed 's/.*(\(.*\))/\1/')" -- --with-pg-config=/usr/local/pgsql/bin/pg_config
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
@@ -59,4 +70,4 @@ WORKDIR /app
 COPY . .
 
 EXPOSE 3010
-CMD ["rails", "server", "-b", "0.0.0.0"]
+CMD ["rails", "server", "-b", "0.0.0.0", "-p", "3010"]
