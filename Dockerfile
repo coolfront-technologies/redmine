@@ -33,9 +33,18 @@ RUN wget --no-check-certificate https://ftp.postgresql.org/pub/source/v12.18/pos
     cd .. && rm -rf postgresql-12.18 postgresql-12.18.tar.gz && \
     ldconfig
 
-# Set environment variables so pg gem finds the new libpq
+# Set environment variables so pg gem finds the new libpq at BUILD and RUNTIME
 ENV PATH="/usr/local/pgsql/bin:$PATH"
-ENV LD_LIBRARY_PATH="/usr/local/pgsql/lib:$LD_LIBRARY_PATH"
+ENV LD_LIBRARY_PATH="/usr/local/pgsql/lib"
+ENV LIBRARY_PATH="/usr/local/pgsql/lib"
+ENV C_INCLUDE_PATH="/usr/local/pgsql/include"
+
+# Also add to ldconfig permanently
+RUN echo "/usr/local/pgsql/lib" > /etc/ld.so.conf.d/postgresql.conf && ldconfig
+
+# Debug: verify libpq version
+RUN /usr/local/pgsql/bin/pg_config --version && \
+    ls -la /usr/local/pgsql/lib/
 
 WORKDIR /app
 
@@ -53,12 +62,11 @@ RUN bundle config set --local ssl_verify_mode 0
 # Configure bundler to use the new pg_config for building pg gem
 RUN bundle config build.pg --with-pg-config=/usr/local/pgsql/bin/pg_config
 
-# Install main app gems
+# Install main app gems (pg will be built with new libpq)
 RUN bundle install --without development test rmagick
 
-# Force rebuild of pg gem with the new libpq
-RUN gem uninstall pg -a -x --force || true && \
-    gem install pg -v "$(grep "pg (" Gemfile.lock | head -1 | sed 's/.*(\(.*\))/\1/')" -- --with-pg-config=/usr/local/pgsql/bin/pg_config
+# Verify pg gem is linked to correct libpq
+RUN ldd $(find /usr/local/bundle -name "pg_ext.so" | head -1) | grep libpq
 
 # Install plugin gems
 WORKDIR /app/plugins/redmine_s3
