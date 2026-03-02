@@ -5,28 +5,33 @@ RUN sed -i 's/deb.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
     sed -i 's/security.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
     sed -i '/stretch-updates/d' /etc/apt/sources.list && \
     echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99ignore-validation && \
-    echo 'Acquire::AllowInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99ignore-validation
+    echo 'Acquire::AllowInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99ignore-validation && \
+    echo 'Acquire::AllowDowngradeToInsecureRepositories "true";' >> /etc/apt/apt.conf.d/99ignore-validation
 
-# Install curl and gnupg first (needed to add PostgreSQL repo)
+# Install base packages first
 RUN apt-get update && apt-get install -y --allow-unauthenticated \
       curl \
       gnupg2 \
-      ca-certificates
-
-# Add PostgreSQL apt repository for newer libpq (version 10+)
-RUN echo "deb http://apt.postgresql.org/pub/repos/apt/ stretch-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
-    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
-
-# Install remaining packages
-RUN apt-get update && apt-get install -y --allow-unauthenticated \
+      ca-certificates \
       build-essential \
-      libpq-dev \
       libxml2-dev \
       libxslt1-dev \
       libmagickwand-dev \
       libmagickcore-dev \
-      git && \
-    rm -rf /var/lib/apt/lists/*
+      git \
+      wget
+
+# Download and install newer libpq manually
+RUN wget --no-check-certificate https://ftp.postgresql.org/pub/source/v12.18/postgresql-12.18.tar.gz && \
+    tar -xzf postgresql-12.18.tar.gz && \
+    cd postgresql-12.18 && \
+    ./configure --without-readline --without-zlib && \
+    make -C src/interfaces/libpq && \
+    make -C src/interfaces/libpq install && \
+    make -C src/bin/pg_config install && \
+    make -C src/include install && \
+    cd .. && rm -rf postgresql-12.18 postgresql-12.18.tar.gz && \
+    ldconfig
 
 WORKDIR /app
 
