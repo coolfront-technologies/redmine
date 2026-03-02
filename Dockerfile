@@ -59,20 +59,11 @@ RUN if [ -f plugins/redmine_s3/lib/redmine_s3/connection.rb ]; then \
 RUN ADAPTER_FILE=$(find /usr/local/bundle/gems -name "postgresql_adapter.rb" -path "*/activerecord-*/lib/active_record/connection_adapters/*" | head -1) && \
     sed -i "s/'panic'/'error'/g" "$ADAPTER_FILE"
 
-# CRITICAL FIX: Patch Rack to add SameSite=None; Secure to all cookies
-RUN RACK_UTILS=$(find /usr/local/bundle/gems -name "utils.rb" -path "*/rack-*/lib/rack/*" | head -1) && \
-    echo "Patching Rack utils at: $RACK_UTILS" && \
-    cp "$RACK_UTILS" "${RACK_UTILS}.backup" && \
-    sed -i 's/; HttpOnly/; HttpOnly; SameSite=None; Secure/g' "$RACK_UTILS" && \
-    sed -i 's/; httponly/; httponly; SameSite=None; Secure/g' "$RACK_UTILS" && \
-    grep -i "httponly" "$RACK_UTILS" || echo "Rack patch applied"
-
 # Session store
 RUN echo "RedmineApp::Application.config.session_store :cookie_store, key: '_redmine_session'" > /app/config/initializers/session_store.rb
 
-# Force HTTPS detection from Azure proxy headers (Rails 3.2 compatible)
+# Force HTTPS detection from Azure proxy headers
 RUN printf '%s\n' \
-    '# Force Rails 3.2 to detect HTTPS from proxy headers' \
     'module ActionController' \
     '  class Request' \
     '    def ssl?' \
@@ -85,7 +76,37 @@ RUN printf '%s\n' \
     'end' \
     > /app/config/initializers/ssl_fix.rb
 
-# Create startup script with Rails 3.2 compatible syntax
+# CRITICAL: Create new config.ru with SameSite cookie middleware
+RUN mv /app/config.ru /app/config.ru.original && \
+    printf '%s\n' \
+    '# SameSite Cookie Middleware for Azure' \
+    'class SameSiteCookies' \
+    '  def initialize(app)' \
+    '    @app = app' \
+    '  end' \
+    '  def call(env)' \
+    '    status, headers, body = @app.call(env)' \
+    '    if headers["Set-Cookie"]' \
+    '      cookies = headers["Set-Cookie"].is_a?(Array) ? headers["Set-Cookie"] : headers["Set-Cookie"].split("\n")' \
+    '      cookies = cookies.map do |cookie|' \
+    '        next cookie if cookie =~ /SameSite=/i' \
+    '        cookie.strip + "; SameSite=None; Secure"' \
+    '      end' \
+    '      headers["Set-Cookie"] = cookies.join("\n")' \
+    '    end' \
+    '    [status, headers, body]' \
+    '  end' \
+    'end' \
+    '' \
+    '# Load original Redmine application' \
+    'require ::File.expand_path("../config/environment",  __FILE__)' \
+    '' \
+    '# Wrap with SameSite middleware' \
+    'use SameSiteCookies' \
+    'run RedmineApp::Application' \
+    > /app/config.ru
+
+# Create startup script
 RUN echo '#!/bin/bash' > /start.sh && \
     echo 'set -e' >> /start.sh && \
     echo 'export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}}' >> /start.sh && \
