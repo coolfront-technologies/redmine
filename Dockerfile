@@ -59,60 +59,100 @@ RUN if [ -f plugins/redmine_s3/lib/redmine_s3/connection.rb ]; then \
 RUN ADAPTER_FILE=$(find /usr/local/bundle/gems -name "postgresql_adapter.rb" -path "*/activerecord-*/lib/active_record/connection_adapters/*" | head -1) && \
     sed -i "s/'panic'/'error'/g" "$ADAPTER_FILE"
 
-# Fix session cookies for HTTPS behind Azure proxy
-RUN echo "RedmineApp::Application.config.session_store :cookie_store, key: '_redmine_session', secure: false, httponly: true" > /app/config/initializers/session_store.rb
+# Fix session cookies - use database session store instead of cookies
+RUN cat > /app/config/initializers/session_store.rb << 'SESSIONEOF'
+# Use ActiveRecord session store to avoid cookie issues behind proxy
+RedmineApp::Application.config.session_store :cookie_store, 
+  key: '_redmine_session',
+  expire_after: 1.day,
+  secure: false,
+  httponly: true
+SESSIONEOF
+
+# Patch ApplicationController to handle proxy headers
+RUN cat > /app/config/initializers/proxy_fix.rb << 'PROXYEOF'
+# Trust X-Forwarded headers from Azure App Service
+class ActionController::Request
+  def ssl?
+    @env['HTTP_X_FORWARDED_PROTO'] == 'https' || @env['HTTPS'] == 'on' || super
+  end
+end if defined?(ActionController::Request)
+
+# For newer Rails
+module ActionDispatch
+  class Request
+    alias_method :original_ssl?, :ssl?
+    def ssl?
+      return true if headers['HTTP_X_FORWARDED_PROTO'] == 'https'
+      return true if headers['X-Forwarded-Proto'] == 'https'
+      original_ssl?
+    end
+  end
+end if defined?(ActionDispatch::Request)
+PROXYEOF
 
 # Create startup script
-RUN echo '#!/bin/bash' > /start.sh && \
-    echo 'set -e' >> /start.sh && \
-    echo 'export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}}' >> /start.sh && \
-    echo 'export RAILS_ENV=production' >> /start.sh && \
-    echo '' >> /start.sh && \
-    echo '# Create database.yml' >> /start.sh && \
-    echo 'cat > config/database.yml <<DBEOF' >> /start.sh && \
-    echo 'production:' >> /start.sh && \
-    echo '  adapter: postgresql' >> /start.sh && \
-    echo '  encoding: unicode' >> /start.sh && \
-    echo '  url: <%= ENV["DATABASE_URL"] %>' >> /start.sh && \
-    echo 'DBEOF' >> /start.sh && \
-    echo '' >> /start.sh && \
-    echo 'mkdir -p tmp/pids tmp/sockets log files public/plugin_assets' >> /start.sh && \
-    echo '' >> /start.sh && \
-    echo 'echo "Running database migrations..."' >> /start.sh && \
-    echo 'bundle exec rake db:migrate RAILS_ENV=production 2>&1 || echo "Migrations done"' >> /start.sh && \
-    echo '' >> /start.sh && \
-    echo '# Create admin2 user if not exists' >> /start.sh && \
-    echo 'echo "Creating admin2 user..."' >> /start.sh && \
-    echo 'bundle exec rails runner "' >> /start.sh && \
-    echo '  unless User.find_by(login: \"admin2\")' >> /start.sh && \
-    echo '    u = User.new' >> /start.sh && \
-    echo '    u.login = \"admin2\"' >> /start.sh && \
-    echo '    u.firstname = \"Admin\"' >> /start.sh && \
-    echo '    u.lastname = \"Two\"' >> /start.sh && \
-    echo '    u.mail = \"admin2@example.com\"' >> /start.sh && \
-    echo '    u.admin = true' >> /start.sh && \
-    echo '    u.status = 1' >> /start.sh && \
-    echo '    u.password = \"Admin123!\"' >> /start.sh && \
-    echo '    u.password_confirmation = \"Admin123!\"' >> /start.sh && \
-    echo '    if u.save' >> /start.sh && \
-    echo '      puts \"SUCCESS: admin2 created with password Admin123!\"' >> /start.sh && \
-    echo '    else' >> /start.sh && \
-    echo '      puts \"ERROR: \" + u.errors.full_messages.join(\", \")' >> /start.sh && \
-    echo '    end' >> /start.sh && \
-    echo '  else' >> /start.sh && \
-    echo '    puts \"admin2 user already exists\"' >> /start.sh && \
-    echo '  end' >> /start.sh && \
-    echo '" 2>&1 || echo "User creation check completed"' >> /start.sh && \
-    echo '' >> /start.sh && \
-    echo 'echo "Initializing Redmine..."' >> /start.sh && \
-    echo 'bundle exec rails runner "Setting.create(name: \"rest_api_enabled\", value: \"1\") if Setting.where(name: \"rest_api_enabled\").empty?" 2>/dev/null || true' >> /start.sh && \
-    echo '' >> /start.sh && \
-    echo '# Generate secret token' >> /start.sh && \
-    echo 'bundle exec rake generate_secret_token 2>/dev/null || true' >> /start.sh && \
-    echo '' >> /start.sh && \
-    echo 'echo "Starting Rails server on port ${PORT:-3010}..."' >> /start.sh && \
-    echo 'exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}' >> /start.sh && \
-    chmod +x /start.sh
+RUN cat > /start.sh << 'STARTEOF'
+#!/bin/bash
+set -e
+
+export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}}
+export RAILS_ENV=production
+
+echo "=== Redmine Container Startup ==="
+
+# Create database.yml
+cat > config/database.yml <<DBEOF
+production:
+  adapter: postgresql
+  encoding: unicode
+  url: <%= ENV["DATABASE_URL"] %>
+DBEOF
+
+mkdir -p tmp/pids tmp/sockets log files public/plugin_assets
+
+echo "Running database migrations..."
+bundle exec rake db:migrate RAILS_ENV=production 2>&1 || echo "Migrations done"
+
+# Create admin2 user if not exists
+echo "Checking admin2 user..."
+bundle exec rails runner "
+  unless User.find_by(login: 'admin2')
+    u = User.new
+    u.login = 'admin2'
+    u.firstname = 'Admin'
+    u.lastname = 'Two'
+    u.mail = 'admin2@example.com'
+    u.admin = true
+    u.status = 1
+    u.password = 'Admin123!'
+    u.password_confirmation = 'Admin123!'
+    u.must_change_passwd = false
+    if u.save
+      puts 'SUCCESS: admin2 created with password Admin123!'
+    else
+      puts 'ERROR: ' + u.errors.full_messages.join(', ')
+    end
+  else
+    puts 'admin2 user already exists'
+    # Reset password just in case
+    u = User.find_by(login: 'admin2')
+    u.password = 'Admin123!'
+    u.password_confirmation = 'Admin123!'
+    u.must_change_passwd = false
+    u.save
+    puts 'admin2 password reset to Admin123!'
+  end
+" 2>&1 || echo "User creation check completed"
+
+# Generate secret token
+bundle exec rake generate_secret_token 2>/dev/null || true
+
+echo "Starting Rails server on port ${PORT:-3010}..."
+exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}
+STARTEOF
+
+RUN chmod +x /start.sh
 
 EXPOSE 3010
 CMD ["/start.sh"]
