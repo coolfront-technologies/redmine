@@ -59,18 +59,21 @@ RUN if [ -f plugins/redmine_s3/lib/redmine_s3/connection.rb ]; then \
 RUN ADAPTER_FILE=$(find /usr/local/bundle/gems -name "postgresql_adapter.rb" -path "*/activerecord-*/lib/active_record/connection_adapters/*" | head -1) && \
     sed -i "s/'panic'/'error'/g" "$ADAPTER_FILE"
 
-# CRITICAL FIX: Patch Rack to add SameSite=None to all cookies
+# CRITICAL FIX: Patch Rack to add SameSite=None; Secure to all cookies
 RUN RACK_UTILS=$(find /usr/local/bundle/gems -name "utils.rb" -path "*/rack-*/lib/rack/*" | head -1) && \
+    echo "Patching Rack utils at: $RACK_UTILS" && \
     cp "$RACK_UTILS" "${RACK_UTILS}.backup" && \
-    sed -i 's/HTTPOnly/HTTPOnly; SameSite=None/g' "$RACK_UTILS" || echo "Rack patch attempted"
+    sed -i 's/; HttpOnly/; HttpOnly; SameSite=None; Secure/g' "$RACK_UTILS" && \
+    sed -i 's/; httponly/; httponly; SameSite=None; Secure/g' "$RACK_UTILS" && \
+    grep -i "httponly" "$RACK_UTILS" || echo "Rack patch applied"
 
-# Session store with secure cookies for HTTPS
+# Session store
 RUN echo "RedmineApp::Application.config.session_store :cookie_store, key: '_redmine_session'" > /app/config/initializers/session_store.rb
 
-# Force HTTPS detection and cookie fix
+# Force HTTPS detection from Azure proxy headers (Rails 3.2 compatible)
 RUN printf '%s\n' \
-    '# Force Rails to detect HTTPS from proxy headers' \
-    'module ActionDispatch' \
+    '# Force Rails 3.2 to detect HTTPS from proxy headers' \
+    'module ActionController' \
     '  class Request' \
     '    def ssl?' \
     '      @env["HTTP_X_FORWARDED_PROTO"] == "https" ||' \
@@ -78,27 +81,9 @@ RUN printf '%s\n' \
     '      @env["HTTPS"] == "on" ||' \
     '      @env["rack.url_scheme"] == "https"' \
     '    end' \
-    '    alias_method :https?, :ssl?' \
     '  end' \
     'end' \
-    '' \
-    '# Monkey-patch cookie setting to add SameSite=None; Secure' \
-    'module ActionDispatch' \
-    '  module Cookies' \
-    '    class CookieJar' \
-    '      private' \
-    '      alias_method :original_set_cookie, :set_cookie' \
-    '      def set_cookie(key, value)' \
-    '        if value.is_a?(Hash)' \
-    '          value[:secure] = true' \
-    '          value[:same_site] = :none' \
-    '        end' \
-    '        original_set_cookie(key, value)' \
-    '      end' \
-    '    end' \
-    '  end' \
-    'end' \
-    > /app/config/initializers/cookie_fix.rb
+    > /app/config/initializers/ssl_fix.rb
 
 # Create startup script
 RUN echo '#!/bin/bash' > /start.sh && \
