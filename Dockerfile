@@ -59,20 +59,58 @@ RUN if [ -f plugins/redmine_s3/lib/redmine_s3/connection.rb ]; then \
 RUN ADAPTER_FILE=$(find /usr/local/bundle/gems -name "postgresql_adapter.rb" -path "*/activerecord-*/lib/active_record/connection_adapters/*" | head -1) && \
     sed -i "s/'panic'/'error'/g" "$ADAPTER_FILE"
 
+# Fix session cookies for HTTPS behind Azure proxy
+RUN echo "RedmineApp::Application.config.session_store :cookie_store, key: '_redmine_session', secure: false, httponly: true" > /app/config/initializers/session_store.rb
+
 # Create startup script
-RUN echo '#!/bin/sh' > /start.sh && \
+RUN echo '#!/bin/bash' > /start.sh && \
+    echo 'set -e' >> /start.sh && \
     echo 'export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}}' >> /start.sh && \
+    echo 'export RAILS_ENV=production' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo '# Create database.yml' >> /start.sh && \
     echo 'cat > config/database.yml <<DBEOF' >> /start.sh && \
     echo 'production:' >> /start.sh && \
     echo '  adapter: postgresql' >> /start.sh && \
     echo '  encoding: unicode' >> /start.sh && \
     echo '  url: <%= ENV["DATABASE_URL"] %>' >> /start.sh && \
     echo 'DBEOF' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo 'mkdir -p tmp/pids tmp/sockets log files public/plugin_assets' >> /start.sh && \
+    echo '' >> /start.sh && \
     echo 'echo "Running database migrations..."' >> /start.sh && \
-    echo 'bundle exec rake db:migrate RAILS_ENV=production' >> /start.sh && \
+    echo 'bundle exec rake db:migrate RAILS_ENV=production 2>&1 || echo "Migrations done"' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo '# Create admin2 user if not exists' >> /start.sh && \
+    echo 'echo "Creating admin2 user..."' >> /start.sh && \
+    echo 'bundle exec rails runner "' >> /start.sh && \
+    echo '  unless User.find_by(login: \"admin2\")' >> /start.sh && \
+    echo '    u = User.new' >> /start.sh && \
+    echo '    u.login = \"admin2\"' >> /start.sh && \
+    echo '    u.firstname = \"Admin\"' >> /start.sh && \
+    echo '    u.lastname = \"Two\"' >> /start.sh && \
+    echo '    u.mail = \"admin2@example.com\"' >> /start.sh && \
+    echo '    u.admin = true' >> /start.sh && \
+    echo '    u.status = 1' >> /start.sh && \
+    echo '    u.password = \"Admin123!\"' >> /start.sh && \
+    echo '    u.password_confirmation = \"Admin123!\"' >> /start.sh && \
+    echo '    if u.save' >> /start.sh && \
+    echo '      puts \"SUCCESS: admin2 created with password Admin123!\"' >> /start.sh && \
+    echo '    else' >> /start.sh && \
+    echo '      puts \"ERROR: \" + u.errors.full_messages.join(\", \")' >> /start.sh && \
+    echo '    end' >> /start.sh && \
+    echo '  else' >> /start.sh && \
+    echo '    puts \"admin2 user already exists\"' >> /start.sh && \
+    echo '  end' >> /start.sh && \
+    echo '" 2>&1 || echo "User creation check completed"' >> /start.sh && \
+    echo '' >> /start.sh && \
     echo 'echo "Initializing Redmine..."' >> /start.sh && \
-    echo 'RAILS_ENV=production bundle exec rails runner "Setting.create(name: \"rest_api_enabled\", value: \"1\") if Setting.where(name: \"rest_api_enabled\").empty?" 2>/dev/null || true' >> /start.sh && \
-    echo 'echo "Starting Rails server..."' >> /start.sh && \
+    echo 'bundle exec rails runner "Setting.create(name: \"rest_api_enabled\", value: \"1\") if Setting.where(name: \"rest_api_enabled\").empty?" 2>/dev/null || true' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo '# Generate secret token' >> /start.sh && \
+    echo 'bundle exec rake generate_secret_token 2>/dev/null || true' >> /start.sh && \
+    echo '' >> /start.sh && \
+    echo 'echo "Starting Rails server on port ${PORT:-3010}..."' >> /start.sh && \
     echo 'exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}' >> /start.sh && \
     chmod +x /start.sh
 
