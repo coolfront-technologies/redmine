@@ -59,17 +59,53 @@ RUN if [ -f plugins/redmine_s3/lib/redmine_s3/connection.rb ]; then \
 RUN ADAPTER_FILE=$(find /usr/local/bundle/gems -name "postgresql_adapter.rb" -path "*/activerecord-*/lib/active_record/connection_adapters/*" | head -1) && \
     sed -i "s/'panic'/'error'/g" "$ADAPTER_FILE"
 
-# Fix session cookies for Azure proxy
-RUN echo "RedmineApp::Application.config.session_store :cookie_store, key: '_redmine_session', expire_after: 86400, secure: false, httponly: true" > /app/config/initializers/session_store.rb
+# CRITICAL FIX: Patch Rack to add SameSite=None to all cookies
+RUN RACK_UTILS=$(find /usr/local/bundle/gems -name "utils.rb" -path "*/rack-*/lib/rack/*" | head -1) && \
+    cp "$RACK_UTILS" "${RACK_UTILS}.backup" && \
+    sed -i 's/HTTPOnly/HTTPOnly; SameSite=None/g' "$RACK_UTILS" || echo "Rack patch attempted"
 
-# Patch ApplicationController to handle proxy headers
-RUN echo "class ActionController::Request; def ssl?; @env['HTTP_X_FORWARDED_PROTO'] == 'https' || @env['HTTPS'] == 'on' || super; end; end if defined?(ActionController::Request)" > /app/config/initializers/proxy_fix.rb
+# Session store with secure cookies for HTTPS
+RUN echo "RedmineApp::Application.config.session_store :cookie_store, key: '_redmine_session'" > /app/config/initializers/session_store.rb
+
+# Force HTTPS detection and cookie fix
+RUN printf '%s\n' \
+    '# Force Rails to detect HTTPS from proxy headers' \
+    'module ActionDispatch' \
+    '  class Request' \
+    '    def ssl?' \
+    '      @env["HTTP_X_FORWARDED_PROTO"] == "https" ||' \
+    '      @env["HTTP_X_ARR_SSL"].present? ||' \
+    '      @env["HTTPS"] == "on" ||' \
+    '      @env["rack.url_scheme"] == "https"' \
+    '    end' \
+    '    alias_method :https?, :ssl?' \
+    '  end' \
+    'end' \
+    '' \
+    '# Monkey-patch cookie setting to add SameSite=None; Secure' \
+    'module ActionDispatch' \
+    '  module Cookies' \
+    '    class CookieJar' \
+    '      private' \
+    '      alias_method :original_set_cookie, :set_cookie' \
+    '      def set_cookie(key, value)' \
+    '        if value.is_a?(Hash)' \
+    '          value[:secure] = true' \
+    '          value[:same_site] = :none' \
+    '        end' \
+    '        original_set_cookie(key, value)' \
+    '      end' \
+    '    end' \
+    '  end' \
+    'end' \
+    > /app/config/initializers/cookie_fix.rb
 
 # Create startup script
 RUN echo '#!/bin/bash' > /start.sh && \
     echo 'set -e' >> /start.sh && \
     echo 'export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}}' >> /start.sh && \
     echo 'export RAILS_ENV=production' >> /start.sh && \
+    echo 'export RAILS_SERVE_STATIC_FILES=true' >> /start.sh && \
     echo 'echo "=== Redmine Container Startup ==="' >> /start.sh && \
     echo 'cat > config/database.yml <<DBEOF' >> /start.sh && \
     echo 'production:' >> /start.sh && \
