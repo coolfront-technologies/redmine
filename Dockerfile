@@ -85,7 +85,7 @@ RUN printf '%s\n' \
     'end' \
     > /app/config/initializers/ssl_fix.rb
 
-# Create startup script
+# Create startup script with Rails 3.2 compatible syntax
 RUN echo '#!/bin/bash' > /start.sh && \
     echo 'set -e' >> /start.sh && \
     echo 'export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}}' >> /start.sh && \
@@ -103,7 +103,7 @@ RUN echo '#!/bin/bash' > /start.sh && \
     echo 'bundle exec rake db:migrate RAILS_ENV=production 2>&1 || echo "Migrations done"' >> /start.sh && \
     echo 'echo "Checking admin2 user..."' >> /start.sh && \
     echo 'bundle exec rails runner "' >> /start.sh && \
-    echo 'u = User.find_by(login: \"admin2\")' >> /start.sh && \
+    echo 'u = User.find_by_login(\"admin2\")' >> /start.sh && \
     echo 'if u.nil?' >> /start.sh && \
     echo '  u = User.new' >> /start.sh && \
     echo '  u.login = \"admin2\"' >> /start.sh && \
