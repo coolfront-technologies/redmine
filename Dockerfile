@@ -1,4 +1,4 @@
-FROM ruby:2.0
+FROM ruby:2.3
  
 # Fix outdated Jessie repositories
 RUN sed -i 's/httpredir.debian.org/archive.debian.org/g' /etc/apt/sources.list && \
