@@ -144,8 +144,8 @@ RUN echo '#!/bin/bash' > /start.sh && \
     echo 'end' >> /start.sh && \
     echo '" 2>&1 || echo "User check completed"' >> /start.sh && \
     echo 'bundle exec rake generate_secret_token 2>/dev/null || true' >> /start.sh && \
-    echo 'echo "Starting Rails server on port ${PORT:-3010}..."' >> /start.sh && \
-    echo 'exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}' >> /start.sh && \
+    echo 'echo "Starting Rack server on port ${PORT:-3010}..."' >> /start.sh && \
+    echo 'exec bundle exec rackup -o 0.0.0.0 -p ${PORT:-3010} config.ru' >> /start.sh && \
     chmod +x /start.sh
 
 EXPOSE 3010
