@@ -52,6 +52,9 @@ class ApplicationController < ActionController::Base
   helper Redmine::MenuManager::MenuHelper
 
   # Simple cookie authentication - bypasses Rails session issues
+   # ...existing code...
+
+  # Simple cookie authentication - bypasses Rails session issues
   def restore_user_from_simple_cookie
     begin
       # DEBUG: Log cookies safely
@@ -60,7 +63,7 @@ class ApplicationController < ActionController::Base
       logger.info "Raw HTTP_COOKIE: #{request.env['HTTP_COOKIE'].to_s[0..200]}"
       logger.info "===================="
       
-      if cookies[:_redmine_user_id].present? && (User.current.nil? || User.current.anonymous?)
+      if cookies[:_redmine_user_id].present?
         user_id = cookies[:_redmine_user_id].to_i
         logger.info "Found user_id in cookie: #{user_id}"
         user = User.find_by_id(user_id)
@@ -79,8 +82,11 @@ class ApplicationController < ActionController::Base
       end
     rescue => e
       logger.error "Simple cookie auth error: #{e.class} - #{e.message}"
+      logger.error e.backtrace.first(5).join("\n")
     end
   end
+
+# ...existing code...
   def set_simple_auth_cookie(user)
     logger.info "=== SETTING SIMPLE AUTH COOKIE ==="
     logger.info "User ID: #{user.id}"
