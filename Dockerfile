@@ -59,67 +59,6 @@ RUN if [ -f plugins/redmine_s3/lib/redmine_s3/connection.rb ]; then \
 RUN ADAPTER_FILE=$(find /usr/local/bundle/gems -name "postgresql_adapter.rb" -path "*/activerecord-*/lib/active_record/connection_adapters/*" | head -1) && \
     sed -i "s/'panic'/'error'/g" "$ADAPTER_FILE"
 
-# Session store with domain setting
-RUN echo "RedmineApp::Application.config.session_store :cookie_store, key: '_redmine_session'" > /app/config/initializers/session_store.rb
-
-# CRITICAL: Disable CSRF check for login (temporary fix)
-RUN printf '%s\n' \
-    '# Skip CSRF verification for login to fix Azure proxy issue' \
-    'class AccountController' \
-    '  skip_before_filter :verify_authenticity_token, only: [:login]' \
-    'end' \
-    > /app/config/initializers/csrf_fix.rb
-
-# Force HTTPS detection from Azure proxy headers
-RUN printf '%s\n' \
-    'module ActionController' \
-    '  class Request' \
-    '    def ssl?' \
-    '      @env["HTTP_X_FORWARDED_PROTO"] == "https" ||' \
-    '      @env["HTTP_X_ARR_SSL"].present? ||' \
-    '      @env["HTTPS"] == "on" ||' \
-    '      @env["rack.url_scheme"] == "https"' \
-    '    end' \
-    '  end' \
-    'end' \
-    > /app/config/initializers/ssl_fix.rb
-
-# CRITICAL: Create new config.ru with SameSite cookie middleware
-RUN mv /app/config.ru /app/config.ru.original 2>/dev/null || true && \
-    printf '%s\n' \
-    '# SameSite Cookie Middleware for Azure' \
-    'class SameSiteCookies' \
-    '  def initialize(app)' \
-    '    @app = app' \
-    '  end' \
-    '  def call(env)' \
-    '    # Set HTTPS flag for Rails' \
-    '    env["HTTPS"] = "on" if env["HTTP_X_FORWARDED_PROTO"] == "https"' \
-    '    env["rack.url_scheme"] = "https" if env["HTTP_X_FORWARDED_PROTO"] == "https"' \
-    '    ' \
-    '    status, headers, body = @app.call(env)' \
-    '    ' \
-    '    if headers["Set-Cookie"]' \
-    '      cookies = headers["Set-Cookie"].is_a?(Array) ? headers["Set-Cookie"] : headers["Set-Cookie"].split("\n")' \
-    '      cookies = cookies.map do |cookie|' \
-    '        next cookie if cookie =~ /SameSite=/i' \
-    '        cookie.strip + "; SameSite=None; Secure"' \
-    '      end' \
-    '      headers["Set-Cookie"] = cookies.join("\n")' \
-    '    end' \
-    '    ' \
-    '    [status, headers, body]' \
-    '  end' \
-    'end' \
-    '' \
-    '# Load original Redmine application' \
-    'require ::File.expand_path("../config/environment",  __FILE__)' \
-    '' \
-    '# Wrap with SameSite middleware' \
-    'use SameSiteCookies' \
-    'run RedmineApp::Application' \
-    > /app/config.ru
-
 # Create startup script
 RUN echo '#!/bin/bash' > /start.sh && \
     echo 'set -e' >> /start.sh && \
@@ -136,27 +75,6 @@ RUN echo '#!/bin/bash' > /start.sh && \
     echo 'mkdir -p tmp/pids tmp/sockets log files public/plugin_assets' >> /start.sh && \
     echo 'echo "Running database migrations..."' >> /start.sh && \
     echo 'bundle exec rake db:migrate RAILS_ENV=production 2>&1 || echo "Migrations done"' >> /start.sh && \
-    echo 'echo "Checking admin2 user..."' >> /start.sh && \
-    echo 'bundle exec rails runner "' >> /start.sh && \
-    echo 'u = User.find_by_login(\"admin2\")' >> /start.sh && \
-    echo 'if u.nil?' >> /start.sh && \
-    echo '  u = User.new' >> /start.sh && \
-    echo '  u.login = \"admin2\"' >> /start.sh && \
-    echo '  u.firstname = \"Admin\"' >> /start.sh && \
-    echo '  u.lastname = \"Two\"' >> /start.sh && \
-    echo '  u.mail = \"admin2@example.com\"' >> /start.sh && \
-    echo '  u.admin = true' >> /start.sh && \
-    echo '  u.status = 1' >> /start.sh && \
-    echo 'end' >> /start.sh && \
-    echo 'u.password = \"Admin123!\"' >> /start.sh && \
-    echo 'u.password_confirmation = \"Admin123!\"' >> /start.sh && \
-    echo 'u.must_change_passwd = false' >> /start.sh && \
-    echo 'if u.save' >> /start.sh && \
-    echo '  puts \"admin2 ready with password Admin123!\"' >> /start.sh && \
-    echo 'else' >> /start.sh && \
-    echo '  puts \"ERROR: \" + u.errors.full_messages.join(\", \")' >> /start.sh && \
-    echo 'end' >> /start.sh && \
-    echo '" 2>&1 || echo "User check completed"' >> /start.sh && \
     echo 'bundle exec rake generate_secret_token 2>/dev/null || true' >> /start.sh && \
     echo 'echo "Starting Rack server on port ${PORT:-3010}..."' >> /start.sh && \
     echo 'exec bundle exec rackup -o 0.0.0.0 -p ${PORT:-3010} config.ru' >> /start.sh && \
