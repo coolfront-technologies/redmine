@@ -55,7 +55,7 @@ class ApplicationController < ActionController::Base
   def restore_user_from_simple_cookie
     # DEBUG: Log all cookies
     logger.info "=== DEBUG COOKIES ==="
-    logger.info "All cookies: #{cookies.to_hash.keys.inspect}"
+    logger.info "All cookies: #{cookies.to_h.keys.inspect}"
     logger.info "_redmine_user_id cookie: #{cookies[:_redmine_user_id].inspect}"
     logger.info "Raw HTTP_COOKIE: #{request.env['HTTP_COOKIE'].inspect}"
     logger.info "===================="
