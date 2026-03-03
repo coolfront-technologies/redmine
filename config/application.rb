@@ -58,8 +58,4 @@ module RedmineApp
 
     config.session_store :cookie_store, :key => '_redmine_session'
 
-    if File.exists?(File.join(File.dirname(__FILE__), 'additional_environment.rb'))
-      instance_eval File.read(File.join(File.dirname(__FILE__), 'additional_environment.rb'))
-    end
-  end
-end
+   config.secret_token = ENV['SECRET_KEY_BASE'] || 'a_very_long_random_string_at_least_30_characters_long_for_security'
