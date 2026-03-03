@@ -57,6 +57,9 @@ class ApplicationController < ActionController::Base
  # ...existing code...
 
   # Simple cookie authentication - bypasses Rails session issues
+# ...existing code...
+
+  # Simple cookie authentication - bypasses Rails session issues
   def restore_user_from_simple_cookie
     begin
       # DEBUG: Log cookies safely
@@ -70,14 +73,23 @@ class ApplicationController < ActionController::Base
         logger.info "Found user_id in cookie: #{user_id}"
         
         if user_id > 0
-          # Use raw SQL to avoid Arel issues
-          user = User.find_by_sql(["SELECT * FROM users WHERE id = ? AND status = ? LIMIT 1", user_id, User::STATUS_ACTIVE]).first
+          # First check if user exists using raw SQL
+          result = ActiveRecord::Base.connection.select_one(
+            "SELECT id, status FROM users WHERE id = #{user_id.to_i} AND status = #{User::STATUS_ACTIVE} LIMIT 1"
+          )
           
-          if user
-            logger.info "Restoring user from simple cookie: #{user.login}"
-            User.current = user
-            logger.info "User.current set successfully"
-            # Skip session entirely - it's causing issues
+          if result && result['id']
+            logger.info "User exists, loading via find..."
+            # Now load properly using find() which works in Rails 3
+            begin
+              user = User.find(result['id'].to_i)
+              logger.info "Restoring user from simple cookie: #{user.login}"
+              User.current = user
+              logger.info "User.current set successfully to: #{User.current.login}"
+            rescue => find_error
+              logger.error "Error in User.find: #{find_error.class} - #{find_error.message}"
+              cookies.delete(:_redmine_user_id)
+            end
           else
             logger.warn "User not found or inactive for id: #{user_id}"
             cookies.delete(:_redmine_user_id)
@@ -91,6 +103,8 @@ class ApplicationController < ActionController::Base
       logger.error e.backtrace.first(5).join("\n")
     end
   end
+
+# ...existing code...
 
 # ...existing code...
 # ...existing code...
