@@ -64,18 +64,23 @@ class ApplicationController < ActionController::Base
       logger.info "===================="
       
       if cookies[:_redmine_user_id].present?
-        user_id = cookies[:_redmine_user_id].to_i
+        user_id = cookies[:_redmine_user_id].to_s.to_i
         logger.info "Found user_id in cookie: #{user_id}"
-        user = User.find_by_id(user_id)
-        if user && user.active?
-          logger.info "Restoring user from simple cookie: #{user.login}"
-          User.current = user
-          session[:user_id] = user.id rescue nil
-          session[:ctime] = Time.now.utc.to_i rescue nil
-          session[:atime] = Time.now.utc.to_i rescue nil
-        else
-          logger.warn "User not found or inactive for id: #{user_id}"
-          cookies.delete(:_redmine_user_id)
+        
+        if user_id > 0
+          # Use find with rescue instead of find_by_id for Rails 3 compatibility
+          user = User.where("id = ?", user_id).first
+          
+          if user && user.active?
+            logger.info "Restoring user from simple cookie: #{user.login}"
+            User.current = user
+            session[:user_id] = user.id rescue nil
+            session[:ctime] = Time.now.utc.to_i rescue nil
+            session[:atime] = Time.now.utc.to_i rescue nil
+          else
+            logger.warn "User not found or inactive for id: #{user_id}"
+            cookies.delete(:_redmine_user_id)
+          end
         end
       else
         logger.info "No _redmine_user_id cookie found"
@@ -85,7 +90,6 @@ class ApplicationController < ActionController::Base
       logger.error e.backtrace.first(5).join("\n")
     end
   end
-
 # ...existing code...
   def set_simple_auth_cookie(user)
     logger.info "=== SETTING SIMPLE AUTH COOKIE ==="
