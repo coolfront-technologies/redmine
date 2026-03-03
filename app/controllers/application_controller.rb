@@ -53,33 +53,48 @@ class ApplicationController < ActionController::Base
 
   # Simple cookie authentication - bypasses Rails session issues
   def restore_user_from_simple_cookie
+    # DEBUG: Log all cookies
+    logger.info "=== DEBUG COOKIES ==="
+    logger.info "All cookies: #{cookies.to_hash.keys.inspect}"
+    logger.info "_redmine_user_id cookie: #{cookies[:_redmine_user_id].inspect}"
+    logger.info "Raw HTTP_COOKIE: #{request.env['HTTP_COOKIE'].inspect}"
+    logger.info "===================="
+    
     if cookies[:_redmine_user_id].present? && (User.current.nil? || User.current.anonymous?)
       begin
         user_id = cookies[:_redmine_user_id].to_i
+        logger.info "Found user_id in cookie: #{user_id}"
         user = User.find_by_id(user_id)
         if user && user.active?
+          logger.info "Restoring user from simple cookie: #{user.login}"
           User.current = user
-          # Also try to set session for compatibility
           session[:user_id] = user.id rescue nil
           session[:ctime] = Time.now.utc.to_i rescue nil
           session[:atime] = Time.now.utc.to_i rescue nil
         else
+          logger.warn "User not found or inactive for id: #{user_id}"
           cookies.delete(:_redmine_user_id)
         end
       rescue => e
         logger.error "Simple cookie auth error: #{e.message}"
         cookies.delete(:_redmine_user_id)
       end
+    else
+      logger.info "No _redmine_user_id cookie found"
     end
   end
 
   def set_simple_auth_cookie(user)
+    logger.info "=== SETTING SIMPLE AUTH COOKIE ==="
+    logger.info "User ID: #{user.id}"
     cookies[:_redmine_user_id] = {
       :value => user.id.to_s,
       :expires => 1.day.from_now,
       :path => '/',
       :httponly => true
     }
+    logger.info "Cookie set with value: #{user.id}"
+    logger.info "=================================="
   end
 
   def clear_simple_auth_cookie
@@ -117,30 +132,27 @@ class ApplicationController < ActionController::Base
     session[:user_id] = user.id
     session[:ctime] = Time.now.utc.to_i
     session[:atime] = Time.now.utc.to_i
-    # Also set simple cookie
     set_simple_auth_cookie(user)
   end
 
   def user_setup
-    # Check the settings cache for each request
     Setting.check_cache
-    # Find the current user
     User.current = find_current_user
     logger.info("  Current user: " + (User.current.logged? ? "#{User.current.login} (id=#{User.current.id})" : "anonymous")) if logger
   end
 
-  # Returns the current user or nil if no user is logged in
-  # and starts a session if needed
   def find_current_user
     user = nil
     unless api_request?
       # First check simple cookie (most reliable for Azure)
       if cookies[:_redmine_user_id].present?
         user = User.active.find_by_id(cookies[:_redmine_user_id].to_i)
+        logger.info "Found user from simple cookie: #{user.login}" if user
       end
       # Then check session
       if user.nil? && session[:user_id]
         user = (User.active.find(session[:user_id]) rescue nil)
+        logger.info "Found user from session: #{user.login}" if user
       end
       # Then try autologin
       if user.nil?
@@ -157,15 +169,6 @@ class ApplicationController < ActionController::Base
       else
         authenticate_with_http_basic do |username, password|
           user = User.try_to_login(username, password) || User.find_by_api_key(username)
-        end
-      end
-      if user && user.admin? && (username = api_switch_user_from_request)
-        su = User.find_by_login(username)
-        if su && su.active?
-          logger.info("  User switched by: #{user.login} (id=#{user.id})") if logger
-          user = su
-        else
-          render_error :message => 'Invalid X-Redmine-Switch-User header', :status => 412
         end
       end
     end
@@ -187,7 +190,6 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  # Sets the logged in user
   def logged_user=(user)
     reset_session
     if user && user.is_a?(User)
@@ -200,7 +202,6 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  # Logs out current user
   def logout_user
     if User.current.logged?
       cookies.delete(autologin_cookie_name)
@@ -210,9 +211,7 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  # check if login is globally required to access the application
   def check_if_login_required
-    # no check needed if user is already logged in
     return true if User.current.logged?
     require_login if Setting.login_required?
   end
@@ -448,7 +447,7 @@ class ApplicationController < ActionController::Base
 
   def invalid_authenticity_token
     if api_request?
-      logger.error "Form authenticity token is missing or is invalid. API calls must include a proper Content-type header (text/xml or text/json)."
+      logger.error "Form authenticity token is missing or is invalid."
     end
     render_error "Invalid form authenticity token."
   end
@@ -578,7 +577,7 @@ class ApplicationController < ActionController::Base
     logger.error "Query::StatementInvalid: #{exception.message}" if logger
     session.delete(:query)
     sort_clear if respond_to?(:sort_clear)
-    render_error "An error occurred while executing the query and has been logged. Please report this error to your Redmine administrator."
+    render_error "An error occurred while executing the query and has been logged."
   end
 
   def render_api_ok
@@ -600,23 +599,5 @@ class ApplicationController < ActionController::Base
 
   def _include_layout?(*args)
     api_request? ? false : super
-  end
-
-  def render_error(exception)
-    puts "="*80
-    puts "ERROR: #{exception.class}: #{exception.message}"
-    puts exception.backtrace.first(20).join("\n")
-    puts "="*80
-    STDOUT.flush
-    logger.error "#{exception.class}: #{exception.message}"
-    logger.error exception.backtrace.first(20).join("\n")
-    render_500
-  end
-
-  def render_500
-    respond_to do |format|
-      format.html { render :template => 'errors/500', :status => 500 }
-      format.any  { head 500 }
-    end
   end
 end

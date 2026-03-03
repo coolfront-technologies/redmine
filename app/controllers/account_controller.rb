@@ -192,11 +192,13 @@ class AccountController < ApplicationController
   end
 
   def successful_authentication(user)
-    logger.info "Successful authentication for '#{user.login}' from #{request.remote_ip} at #{Time.now.utc}"
+    logger.info "=== SUCCESSFUL AUTHENTICATION ==="
+    logger.info "User: #{user.login} (id=#{user.id})"
+    logger.info "Remote IP: #{request.remote_ip}"
+    logger.info "Time: #{Time.now.utc}"
     
     # Set simple cookie FIRST (most reliable for Azure)
     set_simple_auth_cookie(user)
-    logger.info "Simple auth cookie set for user #{user.id}"
     
     # Then set session
     self.logged_user = user
@@ -206,6 +208,7 @@ class AccountController < ApplicationController
       set_autologin_cookie(user)
     end
     
+    logger.info "=== AUTH COMPLETE, REDIRECTING ==="
     call_hook(:controller_account_success_authentication_after, {:user => user })
     redirect_back_or_default my_page_path
   end
