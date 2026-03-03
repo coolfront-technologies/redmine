@@ -420,19 +420,34 @@ class ApplicationController < ActionController::Base
     return false
   end
 
-  def render_error(arg)
-    arg = {:message => arg} unless arg.is_a?(Hash)
-    @message = arg[:message]
-    @message = l(@message) if @message.is_a?(Symbol)
-    @status = arg[:status] || 500
+# ...existing code...
 
-    respond_to do |format|
-      format.html {
-        render :template => 'common/error', :layout => use_layout, :status => @status
-      }
-      format.any { head @status }
-    end
+def render_error(arg)
+  # Log the actual error
+  logger.error "=== RENDER ERROR CALLED ==="
+  if arg.is_a?(Exception)
+    logger.error "Exception: #{arg.class} - #{arg.message}"
+    logger.error arg.backtrace.first(10).join("\n") if arg.backtrace
+  else
+    logger.error "Arg: #{arg.inspect}"
   end
+  logger.error "==========================="
+  
+  arg = {:message => arg} unless arg.is_a?(Hash)
+
+  @message = arg[:message]
+  @message = l(@message) if @message.is_a?(Symbol)
+  @status = arg[:status] || 500
+
+  respond_to do |format|
+    format.html {
+      render :template => 'common/error', :layout => use_layout, :status => @status
+    }
+    format.any { head @status }
+  end
+end
+
+# ...existing code...
 
   def missing_template
     logger.warn "Missing template, responding with 404"
