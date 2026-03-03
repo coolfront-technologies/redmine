@@ -53,15 +53,14 @@ class ApplicationController < ActionController::Base
 
   # Simple cookie authentication - bypasses Rails session issues
   def restore_user_from_simple_cookie
-    # DEBUG: Log all cookies
-    logger.info "=== DEBUG COOKIES ==="
-    logger.info "All cookies: #{cookies.to_h.keys.inspect}"
-    logger.info "_redmine_user_id cookie: #{cookies[:_redmine_user_id].inspect}"
-    logger.info "Raw HTTP_COOKIE: #{request.env['HTTP_COOKIE'].inspect}"
-    logger.info "===================="
-    
-    if cookies[:_redmine_user_id].present? && (User.current.nil? || User.current.anonymous?)
-      begin
+    begin
+      # DEBUG: Log cookies safely
+      logger.info "=== DEBUG COOKIES ==="
+      logger.info "_redmine_user_id cookie: #{cookies[:_redmine_user_id].inspect}"
+      logger.info "Raw HTTP_COOKIE: #{request.env['HTTP_COOKIE'].to_s[0..200]}"
+      logger.info "===================="
+      
+      if cookies[:_redmine_user_id].present? && (User.current.nil? || User.current.anonymous?)
         user_id = cookies[:_redmine_user_id].to_i
         logger.info "Found user_id in cookie: #{user_id}"
         user = User.find_by_id(user_id)
@@ -75,15 +74,13 @@ class ApplicationController < ActionController::Base
           logger.warn "User not found or inactive for id: #{user_id}"
           cookies.delete(:_redmine_user_id)
         end
-      rescue => e
-        logger.error "Simple cookie auth error: #{e.message}"
-        cookies.delete(:_redmine_user_id)
+      else
+        logger.info "No _redmine_user_id cookie found"
       end
-    else
-      logger.info "No _redmine_user_id cookie found"
+    rescue => e
+      logger.error "Simple cookie auth error: #{e.class} - #{e.message}"
     end
   end
-
   def set_simple_auth_cookie(user)
     logger.info "=== SETTING SIMPLE AUTH COOKIE ==="
     logger.info "User ID: #{user.id}"
