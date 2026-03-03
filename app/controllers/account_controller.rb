@@ -1,28 +1,12 @@
 # Redmine - project management software
 # Copyright (C) 2006-2013  Jean-Philippe Lang
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 class AccountController < ApplicationController
   helper :custom_fields
   include CustomFieldsHelper
 
-  # prevents login action to be filtered by check_if_login_required application scope filter
   skip_before_filter :check_if_login_required
 
-  # Login request and validation
   def login
     if request.get?
       if User.current.logged?
@@ -36,18 +20,16 @@ class AccountController < ApplicationController
     render_error :message => e.message
   end
 
-  # Log out current user and redirect to welcome page
   def logout
     if User.current.anonymous?
       redirect_to home_url
     elsif request.post?
       logout_user
+      clear_simple_auth_cookie
       redirect_to home_url
     end
-    # display the logout form
   end
 
-  # Lets user choose a new password
   def lost_password
     (redirect_to(home_url); return) unless Setting.lost_password?
     if params[:token]
@@ -75,17 +57,14 @@ class AccountController < ApplicationController
     else
       if request.post?
         user = User.find_by_mail(params[:mail].to_s)
-        # user not found or not active
         unless user && user.active?
           flash.now[:error] = l(:notice_account_unknown_email)
           return
         end
-        # user cannot change its password
         unless user.change_password_allowed?
           flash.now[:error] = l(:notice_can_t_change_password)
           return
         end
-        # create a new token for password recovery
         token = Token.new(:user => user, :action => "recovery")
         if token.save
           Mailer.lost_password(token).deliver
@@ -97,7 +76,6 @@ class AccountController < ApplicationController
     end
   end
 
-  # User self-registration
   def register
     (redirect_to(home_url); return) unless Setting.self_registration? || session[:auth_source_registration]
     if request.get?
@@ -137,7 +115,6 @@ class AccountController < ApplicationController
     end
   end
 
-  # Token based account activation
   def activate
     (redirect_to(home_url); return) unless Setting.self_registration? && params[:token].present?
     token = Token.find_token('register', params[:token].to_s)
@@ -170,7 +147,6 @@ class AccountController < ApplicationController
     elsif user.new_record?
       onthefly_creation_failed(user, {:login => user.login, :auth_source_id => user.auth_source_id })
     else
-      # Valid user
       successful_authentication(user)
     end
   end
@@ -182,10 +158,8 @@ class AccountController < ApplicationController
       if result.successful?
         user = User.find_or_initialize_by_identity_url(identity_url)
         if user.new_record?
-          # Self-registration off
           (redirect_to(home_url); return) unless Setting.self_registration?
 
-          # Create on the fly
           user.login = registration['nickname'] unless registration['nickname'].nil?
           user.mail = registration['email'] unless registration['email'].nil?
           user.firstname, user.lastname = registration['fullname'].split(' ') unless registration['fullname'].nil?
@@ -207,7 +181,6 @@ class AccountController < ApplicationController
             end
           end
         else
-          # Existing record
           if user.active?
             successful_authentication(user)
           else
@@ -220,18 +193,21 @@ class AccountController < ApplicationController
 
   def successful_authentication(user)
     logger.info "Successful authentication for '#{user.login}' from #{request.remote_ip} at #{Time.now.utc}"
-    # Valid user
-    begin
-      self.logged_user = user
-      # generate a key and set cookie if autologin
-      if params[:autologin] && Setting.autologin?
-        set_autologin_cookie(user)
-      end
-      call_hook(:controller_account_success_authentication_after, {:user => user })
-      redirect_back_or_default my_page_path
-    rescue => e
-      logger.info "Jagan Logs for after login #{e}"
+    
+    # Set simple cookie FIRST (most reliable for Azure)
+    set_simple_auth_cookie(user)
+    logger.info "Simple auth cookie set for user #{user.id}"
+    
+    # Then set session
+    self.logged_user = user
+    
+    # Generate autologin token if requested
+    if params[:autologin] && Setting.autologin?
+      set_autologin_cookie(user)
     end
+    
+    call_hook(:controller_account_success_authentication_after, {:user => user })
+    redirect_back_or_default my_page_path
   end
 
   def set_autologin_cookie(user)
@@ -246,7 +222,6 @@ class AccountController < ApplicationController
     cookies[autologin_cookie_name] = cookie_options
   end
 
-  # Onthefly creation failed, display the registration form to fill/fix attributes
   def onthefly_creation_failed(user, auth_source_options = { })
     @user = user
     session[:auth_source_registration] = auth_source_options unless auth_source_options.empty?
@@ -258,9 +233,6 @@ class AccountController < ApplicationController
     flash.now[:error] = l(:notice_account_invalid_creditentials)
   end
 
-  # Register a user for email activation.
-  #
-  # Pass a block for behavior when a user fails to save
   def register_by_email_activation(user, &block)
     token = Token.new(:user => user, :action => "register")
     if user.save and token.save
@@ -272,11 +244,7 @@ class AccountController < ApplicationController
     end
   end
 
-  # Automatically register a user
-  #
-  # Pass a block for behavior when a user fails to save
   def register_automatically(user, &block)
-    # Automatic activation
     user.activate
     user.last_login_on = Time.now
     if user.save
@@ -288,12 +256,8 @@ class AccountController < ApplicationController
     end
   end
 
-  # Manual activation by the administrator
-  #
-  # Pass a block for behavior when a user fails to save
   def register_manually_by_administrator(user, &block)
     if user.save
-      # Sends an email to the administrators
       Mailer.account_activation_request(user).deliver
       account_pending
     else
