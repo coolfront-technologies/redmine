@@ -19,6 +19,9 @@ RedmineApp::Application.configure do
   config.logger = Logger.new(STDOUT)
   config.logger.level = Logger::INFO
 
+  # Enable memory cache for sessions
+  config.cache_store = :memory_store
+
   #####
   # Customize the default logger (http://ruby-doc.org/core/classes/Logger.html)
   #
