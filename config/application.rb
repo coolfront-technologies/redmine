@@ -58,4 +58,7 @@ module RedmineApp
 
     config.session_store :cookie_store, :key => '_redmine_session'
 
-   config.secret_token = ENV['SECRET_KEY_BASE'] || 'a_very_long_random_string_at_least_30_characters_long_for_security'
+    config.secret_token = ENV['SECRET_KEY_BASE'] || 'a_very_long_random_string_at_least_30_characters_long_for_security'
+
+  end  # ← closes class Application
+end    # ← closes module RedmineApp
