@@ -54,6 +54,8 @@ class ApplicationController < ActionController::Base
   # Simple cookie authentication - bypasses Rails session issues
    # ...existing code...
 
+ # ...existing code...
+
   # Simple cookie authentication - bypasses Rails session issues
   def restore_user_from_simple_cookie
     begin
@@ -68,15 +70,14 @@ class ApplicationController < ActionController::Base
         logger.info "Found user_id in cookie: #{user_id}"
         
         if user_id > 0
-          # Use find with rescue instead of find_by_id for Rails 3 compatibility
-          user = User.where("id = ?", user_id).first
+          # Use raw SQL to avoid Arel issues
+          user = User.find_by_sql(["SELECT * FROM users WHERE id = ? AND status = ? LIMIT 1", user_id, User::STATUS_ACTIVE]).first
           
-          if user && user.active?
+          if user
             logger.info "Restoring user from simple cookie: #{user.login}"
             User.current = user
-            session[:user_id] = user.id rescue nil
-            session[:ctime] = Time.now.utc.to_i rescue nil
-            session[:atime] = Time.now.utc.to_i rescue nil
+            logger.info "User.current set successfully"
+            # Skip session entirely - it's causing issues
           else
             logger.warn "User not found or inactive for id: #{user_id}"
             cookies.delete(:_redmine_user_id)
@@ -90,6 +91,8 @@ class ApplicationController < ActionController::Base
       logger.error e.backtrace.first(5).join("\n")
     end
   end
+
+# ...existing code...
 # ...existing code...
   def set_simple_auth_cookie(user)
     logger.info "=== SETTING SIMPLE AUTH COOKIE ==="
