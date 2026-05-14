@@ -56,10 +56,9 @@ module RedmineApp
     # Do not include all helpers
     config.action_controller.include_all_helpers = false
 
-    config.session_store :cookie_store, :key => '_redmine_session'
+    # COMMENT OUT OR REMOVE THIS LINE:
+    # config.session_store :cookie_store, :key => '_redmine_session'
 
-    if File.exists?(File.join(File.dirname(__FILE__), 'additional_environment.rb'))
-      instance_eval File.read(File.join(File.dirname(__FILE__), 'additional_environment.rb'))
-    end
+    config.secret_token = ENV['SECRET_KEY_BASE'] || 'a_very_long_random_string_at_least_30_characters_long_for_security'
   end
 end

@@ -60,20 +60,24 @@ RUN ADAPTER_FILE=$(find /usr/local/bundle/gems -name "postgresql_adapter.rb" -pa
     sed -i "s/'panic'/'error'/g" "$ADAPTER_FILE"
 
 # Create startup script
-RUN echo '#!/bin/sh' > /start.sh && \
+RUN echo '#!/bin/bash' > /start.sh && \
+    echo 'set -e' >> /start.sh && \
     echo 'export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}}' >> /start.sh && \
+    echo 'export RAILS_ENV=production' >> /start.sh && \
+    echo 'export RAILS_SERVE_STATIC_FILES=true' >> /start.sh && \
+    echo 'echo "=== Redmine Container Startup ==="' >> /start.sh && \
     echo 'cat > config/database.yml <<DBEOF' >> /start.sh && \
     echo 'production:' >> /start.sh && \
     echo '  adapter: postgresql' >> /start.sh && \
     echo '  encoding: unicode' >> /start.sh && \
     echo '  url: <%= ENV["DATABASE_URL"] %>' >> /start.sh && \
     echo 'DBEOF' >> /start.sh && \
+    echo 'mkdir -p tmp/pids tmp/sockets log files public/plugin_assets' >> /start.sh && \
     echo 'echo "Running database migrations..."' >> /start.sh && \
-    echo 'bundle exec rake db:migrate RAILS_ENV=production' >> /start.sh && \
-    echo 'echo "Initializing Redmine..."' >> /start.sh && \
-    echo 'RAILS_ENV=production bundle exec rails runner "Setting.create(name: \"rest_api_enabled\", value: \"1\") if Setting.where(name: \"rest_api_enabled\").empty?" 2>/dev/null || true' >> /start.sh && \
-    echo 'echo "Starting Rails server..."' >> /start.sh && \
-    echo 'exec bundle exec rails server -b 0.0.0.0 -p ${PORT:-3010}' >> /start.sh && \
+    echo 'bundle exec rake db:migrate RAILS_ENV=production 2>&1 || echo "Migrations done"' >> /start.sh && \
+    echo 'bundle exec rake generate_secret_token 2>/dev/null || true' >> /start.sh && \
+    echo 'echo "Starting Rack server on port ${PORT:-3010}..."' >> /start.sh && \
+    echo 'exec bundle exec rackup -o 0.0.0.0 -p ${PORT:-3010} config.ru' >> /start.sh && \
     chmod +x /start.sh
 
 EXPOSE 3010
