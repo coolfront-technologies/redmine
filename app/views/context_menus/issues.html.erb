@@ -77,11 +77,12 @@
   </li>
   <% end %>
 
-  <% if @safe_attributes.include?('category_id') && @project && @project.issue_categories.any? -%>
+  <% categories_for_issues_menu = @project ? IssueCategory.where(:project_id => @project.id).order("#{IssueCategory.table_name}.name").to_a : [] %>
+  <% if @safe_attributes.include?('category_id') && @project && categories_for_issues_menu.present? -%>
   <li class="folder">
     <a href="#" class="submenu"><%= l(:field_category) %></a>
     <ul>
-    <% @project.issue_categories.each do |u| -%>
+    <% categories_for_issues_menu.each do |u| -%>
         <li><%= context_menu_link h(u.name), bulk_update_issues_path(:ids => @issue_ids, :issue => {'category_id' => u}, :back_url => @back), :method => :post,
                                   :selected => (@issue && u == @issue.category), :disabled => !@can[:update] %></li>
     <% end -%>
