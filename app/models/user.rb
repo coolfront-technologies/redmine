@@ -666,8 +666,12 @@ class User < Principal
     Message.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
     Rails.logger.info("DEBUG: News.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     News.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
-    # Remove private queries and keep public ones
-    ::Query.delete_all ['user_id = ? AND is_public = ?', id, false]
+    # Remove private queries and keep shared ones (legacy is_public; newer visibility integer).
+    if ::Query.column_names.include?('is_public')
+      ::Query.delete_all ['user_id = ? AND is_public = ?', id, false]
+    elsif ::Query.column_names.include?('visibility')
+      ::Query.delete_all ["user_id = ? AND COALESCE(#{::Query.table_name}.visibility, 0) = ?", id, 0]
+    end
     Rails.logger.info("DEBUG: Query.update_all user_id for substitute_id={substitute.id}, user_id={id}")
     ::Query.update_all ['user_id = ?', substitute.id], ['user_id = ?', id]
     Rails.logger.info("DEBUG: TimeEntry.update_all user_id for substitute_id={substitute.id}, user_id={id}")
