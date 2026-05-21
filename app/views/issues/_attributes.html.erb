@@ -3,11 +3,12 @@
 <div class="splitcontent">
 <div class="splitcontentleft">
 <% if @issue.safe_attribute?('status_id') && @allowed_statuses.present? %>
-<p><%= f.select :status_id, (@allowed_statuses.collect {|p| [p.name, p.id]}), {:required => true},
+<p><%= f.select :status_id, (@allowed_statuses.compact.collect {|s| [s.name, s.id]}), {:required => true},
                 :onchange => "updateIssueFrom('#{escape_javascript project_issue_form_path(@project, :id => @issue, :format => 'js')}')" %></p>
 
 <% else %>
-<p><label><%= l(:field_status) %></label> <%= h(@issue.status.name) %></p>
+<%   st = @issue.status || IssueStatus.default %>
+<p><label><%= l(:field_status) %></label> <%= st ? h(st.name) : content_tag(:em, l(:label_none)) %></p>
 <% end %>
 
 <% if @issue.safe_attribute? 'priority_id' %>
@@ -18,8 +19,10 @@
 <p><%= f.select :assigned_to_id, principals_options_for_select(@issue.assignable_users, @issue.assigned_to), :include_blank => true, :required => @issue.required_attribute?('assigned_to_id') %></p>
 <% end %>
 
-<% if @issue.safe_attribute?('category_id') && @issue.project.issue_categories.any? %>
-<p><%= f.select :category_id, (@issue.project.issue_categories.collect {|c| [c.name, c.id]}), :include_blank => true, :required => @issue.required_attribute?('category_id') %>
+<% issue_category_options = (@issue.safe_attribute?('category_id') && @issue.project) ?
+  IssueCategory.where(:project_id => @issue.project_id).order("#{IssueCategory.table_name}.name").to_a : [] %>
+<% if issue_category_options.present? %>
+<p><%= f.select :category_id, (issue_category_options.collect {|c| [c.name, c.id]}), :include_blank => true, :required => @issue.required_attribute?('category_id') %>
 <%= link_to(image_tag('add.png', :style => 'vertical-align: middle;'),
             new_project_issue_category_path(@issue.project),
             :remote => true,

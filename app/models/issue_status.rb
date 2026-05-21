@@ -32,12 +32,35 @@ class IssueStatus < ActiveRecord::Base
   scope :named, lambda {|arg| where("LOWER(#{table_name}.name) = LOWER(?)", arg.to_s.strip)}
 
   def update_default
-    IssueStatus.update_all({:is_default => false}, ['id <> ?', id]) if self.is_default?
+    return unless self.class.column_names.include?('is_default')
+
+    IssueStatus.update_all({:is_default => false}, ['id <> ?', id]) if read_attribute(:is_default)
   end
 
-  # Returns the default status for new issues
+  # Returns the default status for new issues.
+  # If issue_statuses.is_default is absent (legacy DB), fall back to first open status by position/id.
   def self.default
-    where(:is_default => true).first
+    tbl = table_name
+
+    if column_names.include?('is_default')
+      s = where(:is_default => true).first
+      return s if s
+    end
+
+    rel = where(:is_closed => false)
+    if column_names.include?('position')
+      rel = rel.order("#{tbl}.position ASC, #{tbl}.id ASC")
+    else
+      rel = rel.order("#{tbl}.id ASC")
+    end
+    rel.first || order("#{tbl}.id ASC").first
+  end
+
+  def is_default?
+    return !!read_attribute(:is_default) if self.class.column_names.include?('is_default')
+
+    d = self.class.default
+    d.present? && d.id == id
   end
 
   # Update all the +Issues+ setting their done_ratio to the value of their +IssueStatus+

@@ -47,7 +47,17 @@ class IssueQuery < Query
     base = Project.allowed_to_condition(user, :view_issues, *args)
     user_id = user.logged? ? user.id : 0
 
-    includes(:project).where("(#{table_name}.project_id IS NULL OR (#{base})) AND (#{table_name}.is_public = ? OR #{table_name}.user_id = ?)", true, user_id)
+    # Upgraded Redmine DBs use visibility (0=private, >0=shared) instead of is_public.
+    cond =
+      if column_names.include?('is_public')
+        ["(#{table_name}.is_public = ? OR #{table_name}.user_id = ?)", true, user_id]
+      elsif column_names.include?('visibility')
+        ["(COALESCE(#{table_name}.visibility, 0) <> 0 OR #{table_name}.user_id = ?)", user_id]
+      else
+        ["(#{table_name}.user_id = ?)", user_id]
+      end
+
+    includes(:project).where("(#{table_name}.project_id IS NULL OR (#{base})) AND (#{cond[0]})", *cond[1..-1])
   }
 
   def initialize(attributes=nil, *args)
@@ -57,7 +67,7 @@ class IssueQuery < Query
 
   # Returns true if the query is visible to +user+ or the current user.
   def visible?(user=User.current)
-    (project.nil? || user.allowed_to?(:view_issues, project)) && (self.is_public? || self.user_id == user.id)
+    (project.nil? || user.allowed_to?(:view_issues, project)) && (is_public? || self.user_id == user.id)
   end
 
   def initialize_available_filters
