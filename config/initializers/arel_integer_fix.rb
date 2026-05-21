@@ -1,25 +1,19 @@
-# Fix for Arel 3.0.3 "Cannot visit Integer" error
-# This occurs when integer values are passed directly to Arel queries
-# in Ruby 2.6+ where Fixnum is deprecated and unified into Integer
+# Ruby 2.4+ merged Fixnum/Bignum into Integer. Arel 3.0.3 only declares visit_* for Fixnum/Bignum,
+# which breaks SQL generation / depth-first traversal for bare Integer literals (e.g. /my/page queries).
 
-require 'arel'
-require 'arel/visitors/to_sql'
+if defined?(Arel::Visitors::ToSql) && defined?(Arel::Visitors::DepthFirst)
+  module Arel
+    module Visitors
+      class ToSql
+        # Same dispatch as legacy visit_Fixnum (integer SQL fragments)
+        alias :visit_Integer :literal
+      end
 
-module Arel
-  module Visitors
-    class ToSql
-      # Patch to handle Integer values that Arel 3.0.3 can't visit
-      alias_method :original_visit, :visit
-      
-      def visit(object, *args)
-        if object.is_a?(Integer)
-          object.to_s
-        else
-          original_visit(object, *args)
-        end
+      class DepthFirst
+        private
+
+        alias :visit_Integer :visit_Fixnum
       end
     end
   end
 end
-
-Rails.logger.info "Arel Integer fix loaded" if defined?(Rails.logger) && Rails.logger
