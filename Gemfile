@@ -38,8 +38,6 @@ end
 gem "pg", "~> 0.18.0", :platforms => [:mri, :mingw]
 gem "activerecord-jdbcpostgresql-adapter", :platforms => :jruby
 
-gem "mysql2", "~> 0.3.11", :platforms => [:mri, :mingw]
-gem "activerecord-jdbcmysql-adapter", :platforms => :jruby
 
 group :development do
   gem "rdoc", ">= 2.4.2"

@@ -60,25 +60,37 @@ RUN ADAPTER_FILE=$(find /usr/local/bundle/gems -name "postgresql_adapter.rb" -pa
     sed -i "s/'panic'/'error'/g" "$ADAPTER_FILE"
 
 # Create startup script
-RUN echo '#!/bin/bash' > /start.sh && \
-    echo 'set -e' >> /start.sh && \
-    echo 'export SECRET_TOKEN=${SECRET_TOKEN:-${SECRET_KEY_BASE}}' >> /start.sh && \
-    echo 'export RAILS_ENV=production' >> /start.sh && \
-    echo 'export RAILS_SERVE_STATIC_FILES=true' >> /start.sh && \
-    echo 'echo "=== Redmine Container Startup ==="' >> /start.sh && \
-    echo 'cat > config/database.yml <<DBEOF' >> /start.sh && \
-    echo 'production:' >> /start.sh && \
-    echo '  adapter: postgresql' >> /start.sh && \
-    echo '  encoding: unicode' >> /start.sh && \
-    echo '  url: <%= ENV["DATABASE_URL"] %>' >> /start.sh && \
-    echo 'DBEOF' >> /start.sh && \
-    echo 'mkdir -p tmp/pids tmp/sockets log files public/plugin_assets' >> /start.sh && \
-    echo 'echo "Running database migrations..."' >> /start.sh && \
-    echo 'bundle exec rake db:migrate RAILS_ENV=production 2>&1 || echo "Migrations done"' >> /start.sh && \
-    echo 'bundle exec rake generate_secret_token 2>/dev/null || true' >> /start.sh && \
-    echo 'echo "Starting Rack server on port ${PORT:-3010}..."' >> /start.sh && \
-    echo 'exec bundle exec rackup -o 0.0.0.0 -p ${PORT:-3010} config.ru' >> /start.sh && \
-    chmod +x /start.sh
+RUN cat <<'EOS' > /start.sh
+#!/bin/bash
+set -e
+export SECRET_TOKEN="${SECRET_TOKEN:-${SECRET_KEY_BASE}}"
+export RAILS_ENV=production
+export RAILS_SERVE_STATIC_FILES=true
+
+echo "=== Redmine Container Startup ==="
+mkdir -p tmp/pids tmp/sockets log files public/plugin_assets
+cat > config/database.yml <<'DBYAML'
+production:
+  adapter: postgresql
+  encoding: unicode
+  url: <%= ENV["DATABASE_URL"] %>
+DBYAML
+
+if [[ "${REDMINE_NO_DB_MIGRATE:-}" == "1" ]]; then
+  echo "Skipping db:migrate (REDMINE_NO_DB_MIGRATE=1)"
+elif [[ -n "${WEBSITE_SITE_NAME:-}" ]]; then
+  echo "Skipping db:migrate (Azure App Service: WEBSITE_SITE_NAME is set — run migrations via release pipeline or rake task if needed)"
+else
+  echo "Running database migrations..."
+  bundle exec rake db:migrate RAILS_ENV=production 2>&1 || echo "Migrations done"
+fi
+
+bundle exec rake generate_secret_token 2>/dev/null || true
+echo "Starting Rack server on port ${PORT:-3010}..."
+exec bundle exec rackup -o 0.0.0.0 -p "${PORT:-3010}" config.ru
+EOS
+
+RUN chmod +x /start.sh
 
 EXPOSE 3010
 CMD ["/start.sh"]
