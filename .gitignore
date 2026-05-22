@@ -1,5 +1,6 @@
 /.project
 /.loadpath
+/.env
 /config/additional_environment.rb
 /config/database.yml
 /config/email.yml
