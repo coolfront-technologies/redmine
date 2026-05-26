@@ -89,15 +89,16 @@ class User < Principal
   LOGIN_LENGTH_LIMIT = 60
   MAIL_LENGTH_LIMIT = 60
 
-  validates_presence_of :login, :firstname, :lastname, :mail, :if => Proc.new { |user| !user.is_a?(AnonymousUser) }
+  validates_presence_of :login, :firstname, :lastname, :if => Proc.new { |user| !user.is_a?(AnonymousUser) }
+  validates_presence_of :mail, :if => Proc.new { |user| !user.is_a?(AnonymousUser) && user.class.mail_column_available? }
   validates_uniqueness_of :login, :if => Proc.new { |user| user.login_changed? && user.login.present? }, :case_sensitive => false
-  validates_uniqueness_of :mail, :if => Proc.new { |user| user.mail_changed? && user.mail.present? }, :case_sensitive => false
+  validates_uniqueness_of :mail, :if => Proc.new { |user| user.class.mail_column_available? && user.mail_changed? && user.mail.present? }, :case_sensitive => false
   # Login must contain letters, numbers, underscores only
   validates_format_of :login, :with => /\A[a-z0-9_\-@\.]*\z/i
   validates_length_of :login, :maximum => LOGIN_LENGTH_LIMIT
   validates_length_of :firstname, :lastname, :maximum => 30
-  validates_format_of :mail, :with => /\A([^@\s]+)@((?:[-a-z0-9]+\.)+[a-z]{2,})\z/i, :allow_blank => true
-  validates_length_of :mail, :maximum => MAIL_LENGTH_LIMIT, :allow_nil => true
+  validates_format_of :mail, :with => /\A([^@\s]+)@((?:[-a-z0-9]+\.)+[a-z]{2,})\z/i, :allow_blank => true, :if => Proc.new { |user| user.class.mail_column_available? }
+  validates_length_of :mail, :maximum => MAIL_LENGTH_LIMIT, :allow_nil => true, :if => Proc.new { |user| user.class.mail_column_available? }
   validates_confirmation_of :password, :allow_nil => true
   validates_inclusion_of :mail_notification, :in => MAIL_NOTIFICATION_OPTIONS.collect(&:first), :allow_blank => true
   validate :validate_password_length
@@ -136,8 +137,22 @@ class User < Principal
     base_reload(*args)
   end
 
+  def self.mail_column_available?
+    column_names.include?('mail')
+  rescue Exception
+    false
+  end
+
+  def mail
+    self.class.mail_column_available? ? read_attribute(:mail) : nil
+  end
+
   def mail=(arg)
-    write_attribute(:mail, arg.to_s.strip)
+    write_attribute(:mail, arg.to_s.strip) if self.class.mail_column_available?
+  end
+
+  def mail_changed?
+    self.class.mail_column_available? && changed.include?('mail')
   end
 
   def identity_url=(url)
@@ -378,6 +393,8 @@ class User < Principal
 
   # Makes find_by_mail case-insensitive
   def self.find_by_mail(mail)
+    return nil unless mail_column_available?
+
     where("LOWER(mail) = ?", mail.to_s.downcase).first
   end
 
@@ -555,12 +572,14 @@ class User < Principal
   safe_attributes 'login',
     'firstname',
     'lastname',
-    'mail',
     'mail_notification',
     'language',
     'custom_field_values',
     'custom_fields',
     'identity_url'
+
+  safe_attributes 'mail',
+    :if => lambda {|user, current_user| user.class.mail_column_available?}
 
   safe_attributes 'status',
     'auth_source_id',
@@ -610,7 +629,9 @@ class User < Principal
   def self.anonymous
     anonymous_user = AnonymousUser.first
     if anonymous_user.nil?
-      anonymous_user = AnonymousUser.create(:lastname => 'Anonymous', :firstname => '', :mail => '', :login => '', :status => 0)
+      attributes = {:lastname => 'Anonymous', :firstname => '', :login => '', :status => 0}
+      attributes[:mail] = '' if mail_column_available?
+      anonymous_user = AnonymousUser.create(attributes)
       raise 'Unable to create the anonymous user.' if anonymous_user.new_record?
     end
     anonymous_user

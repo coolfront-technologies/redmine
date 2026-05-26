@@ -29,7 +29,9 @@ class UsersController < ApplicationController
 
   def index
     sort_init 'login', 'asc'
-    sort_update %w(login firstname lastname mail admin created_on last_login_on)
+    sort_columns = %w(login firstname lastname admin created_on last_login_on)
+    sort_columns.insert(3, 'mail') if User.mail_column_available?
+    sort_update sort_columns
 
     case params[:format]
     when 'xml', 'json'
