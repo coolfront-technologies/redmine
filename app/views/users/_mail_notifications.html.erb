@@ -7,9 +7,8 @@
       :onchange => 'if (this.value == "selected") {$("#notified-projects").show();} else {$("#notified-projects").hide();}'
      ) %>
 </p>
-<% notification_projects = @user.memberships.collect(&:project).compact.uniq %>
 <%= content_tag 'div', :id => 'notified-projects', :style => (@user.mail_notification == 'selected' ? '' : 'display:none;') do %>
-  <%= render_project_nested_lists(notification_projects) do |project|
+  <%= render_project_nested_lists(@user.projects) do |project|
         content_tag('label', 
           check_box_tag(
             'notified_project_ids[]',

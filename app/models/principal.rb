@@ -38,7 +38,9 @@ class Principal < ActiveRecord::Base
       where({})
     else
       pattern = "%#{q}%"
-      sql = %w(login firstname lastname mail).map {|column| "LOWER(#{table_name}.#{column}) LIKE LOWER(:p)"}.join(" OR ")
+      searchable_columns = %w(login firstname lastname)
+      searchable_columns << 'mail' if column_names.include?('mail')
+      sql = searchable_columns.map {|column| "LOWER(#{table_name}.#{column}) LIKE LOWER(:p)"}.join(" OR ")
       params = {:p => pattern}
       if q =~ /^(.+)\s+(.+)$/
         a, b = "#{$1}%", "#{$2}%"
