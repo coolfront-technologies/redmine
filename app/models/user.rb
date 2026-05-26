@@ -89,15 +89,16 @@ class User < Principal
   LOGIN_LENGTH_LIMIT = 60
   MAIL_LENGTH_LIMIT = 60
 
-  validates_presence_of :login, :firstname, :lastname, :mail, :if => Proc.new { |user| !user.is_a?(AnonymousUser) }
+  validates_presence_of :login, :firstname, :lastname, :if => Proc.new { |user| !user.is_a?(AnonymousUser) }
+  validates_presence_of :mail, :if => Proc.new { |user| !user.is_a?(AnonymousUser) && user.class.mail_column_available? }
   validates_uniqueness_of :login, :if => Proc.new { |user| user.login_changed? && user.login.present? }, :case_sensitive => false
-  validates_uniqueness_of :mail, :if => Proc.new { |user| user.mail_changed? && user.mail.present? }, :case_sensitive => false
+  validates_uniqueness_of :mail, :if => Proc.new { |user| user.class.mail_column_available? && user.mail_changed? && user.mail.present? }, :case_sensitive => false
   # Login must contain letters, numbers, underscores only
   validates_format_of :login, :with => /\A[a-z0-9_\-@\.]*\z/i
   validates_length_of :login, :maximum => LOGIN_LENGTH_LIMIT
   validates_length_of :firstname, :lastname, :maximum => 30
-  validates_format_of :mail, :with => /\A([^@\s]+)@((?:[-a-z0-9]+\.)+[a-z]{2,})\z/i, :allow_blank => true
-  validates_length_of :mail, :maximum => MAIL_LENGTH_LIMIT, :allow_nil => true
+  validates_format_of :mail, :with => /\A([^@\s]+)@((?:[-a-z0-9]+\.)+[a-z]{2,})\z/i, :allow_blank => true, :if => Proc.new { |user| user.class.mail_column_available? }
+  validates_length_of :mail, :maximum => MAIL_LENGTH_LIMIT, :allow_nil => true, :if => Proc.new { |user| user.class.mail_column_available? }
   validates_confirmation_of :password, :allow_nil => true
   validates_inclusion_of :mail_notification, :in => MAIL_NOTIFICATION_OPTIONS.collect(&:first), :allow_blank => true
   validate :validate_password_length
@@ -136,8 +137,22 @@ class User < Principal
     base_reload(*args)
   end
 
+  def self.mail_column_available?
+    column_names.include?('mail')
+  rescue Exception
+    false
+  end
+
+  def mail
+    self.class.mail_column_available? ? read_attribute(:mail) : nil
+  end
+
   def mail=(arg)
-    write_attribute(:mail, arg.to_s.strip)
+    write_attribute(:mail, arg.to_s.strip) if self.class.mail_column_available?
+  end
+
+  def mail_changed?
+    self.class.mail_column_available? && changed.include?('mail')
   end
 
   def identity_url=(url)
@@ -178,7 +193,11 @@ class User < Principal
         end
       end
     end
-    user.update_column(:last_login_on, Time.now) if user && !user.new_record?
+    if user && !user.new_record?
+      Rails.logger.info("DEBUG: user.class=#{user.class}, user.id=#{user.try(:id)}")
+      Rails.logger.info("DEBUG: Executing raw SQL to update last_login_on for user id=#{user.id}")
+      User.connection.execute("UPDATE users SET last_login_on='#{Time.now.utc.to_s(:db)}' WHERE id=#{user.id}")
+    end
     user
   rescue => text
     raise text
@@ -188,7 +207,9 @@ class User < Principal
   def self.try_to_autologin(key)
     user = Token.find_active_user('autologin', key, Setting.autologin.to_i)
     if user
-      user.update_column(:last_login_on, Time.now)
+      Rails.logger.info("DEBUG: user.class=#{user.class}, user.id=#{user.try(:id)}")
+      Rails.logger.info("DEBUG: Executing raw SQL to update last_login_on for user id=#{user.id}")
+      User.connection.execute("UPDATE users SET last_login_on='#{Time.now.utc.to_s(:db)}' WHERE id=#{user.id}")
       user
     end
   end
@@ -322,8 +343,12 @@ class User < Principal
   end
 
   def notified_project_ids=(ids)
+    Rails.logger.info("DEBUG: Member.update_all with quoted_false for user_id={id}")
     Member.update_all("mail_notification = #{connection.quoted_false}", ['user_id = ?', id])
-    Member.update_all("mail_notification = #{connection.quoted_true}", ['user_id = ? AND project_id IN (?)', id, ids]) if ids && !ids.empty?
+    if ids && !ids.empty?
+      Rails.logger.info("DEBUG: Member.update_all with quoted_true for user_id={id}, project_ids={ids}")
+      Member.update_all("mail_notification = #{connection.quoted_true}", ['user_id = ? AND project_id IN (?)', id, ids])
+    end
     @notified_projects_ids = nil
     notified_projects_ids
   end
@@ -368,6 +393,8 @@ class User < Principal
 
   # Makes find_by_mail case-insensitive
   def self.find_by_mail(mail)
+    return nil unless mail_column_available?
+
     where("LOWER(mail) = ?", mail.to_s.downcase).first
   end
 
@@ -545,12 +572,14 @@ class User < Principal
   safe_attributes 'login',
     'firstname',
     'lastname',
-    'mail',
     'mail_notification',
     'language',
     'custom_field_values',
     'custom_fields',
     'identity_url'
+
+  safe_attributes 'mail',
+    :if => lambda {|user, current_user| user.class.mail_column_available?}
 
   safe_attributes 'status',
     'auth_source_id',
@@ -600,7 +629,9 @@ class User < Principal
   def self.anonymous
     anonymous_user = AnonymousUser.first
     if anonymous_user.nil?
-      anonymous_user = AnonymousUser.create(:lastname => 'Anonymous', :firstname => '', :mail => '', :login => '', :status => 0)
+      attributes = {:lastname => 'Anonymous', :firstname => '', :login => '', :status => 0}
+      attributes[:mail] = '' if mail_column_available?
+      anonymous_user = AnonymousUser.create(attributes)
       raise 'Unable to create the anonymous user.' if anonymous_user.new_record?
     end
     anonymous_user
@@ -615,6 +646,7 @@ class User < Principal
         next if user.hashed_password.blank?
         salt = User.generate_salt
         hashed_password = User.hash_password("#{salt}#{user.hashed_password}")
+        Rails.logger.info("DEBUG: User.update_all salt/hashed_password for user_id={user.id}")
         User.where(:id => user.id).update_all(:salt => salt, :hashed_password => hashed_password)
       end
     end
@@ -637,22 +669,39 @@ class User < Principal
     return if self.id.nil?
 
     substitute = User.anonymous
+    Rails.logger.info("DEBUG: Attachment.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     Attachment.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
+    Rails.logger.info("DEBUG: Comment.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     Comment.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
+    Rails.logger.info("DEBUG: Issue.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     Issue.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
+    Rails.logger.info("DEBUG: Issue.update_all assigned_to_id=NULL for user_id={id}")
     Issue.update_all 'assigned_to_id = NULL', ['assigned_to_id = ?', id]
+    Rails.logger.info("DEBUG: Journal.update_all user_id for substitute_id={substitute.id}, user_id={id}")
     Journal.update_all ['user_id = ?', substitute.id], ['user_id = ?', id]
+    Rails.logger.info("DEBUG: JournalDetail.update_all old_value for substitute_id={substitute.id}, user_id={id}")
     JournalDetail.update_all ['old_value = ?', substitute.id.to_s], ["property = 'attr' AND prop_key = 'assigned_to_id' AND old_value = ?", id.to_s]
+    Rails.logger.info("DEBUG: JournalDetail.update_all value for substitute_id={substitute.id}, user_id={id}")
     JournalDetail.update_all ['value = ?', substitute.id.to_s], ["property = 'attr' AND prop_key = 'assigned_to_id' AND value = ?", id.to_s]
+    Rails.logger.info("DEBUG: Message.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     Message.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
+    Rails.logger.info("DEBUG: News.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     News.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
-    # Remove private queries and keep public ones
-    ::Query.delete_all ['user_id = ? AND is_public = ?', id, false]
+    # Remove private queries and keep shared ones (legacy is_public; newer visibility integer).
+    if ::Query.column_names.include?('is_public')
+      ::Query.delete_all ['user_id = ? AND is_public = ?', id, false]
+    elsif ::Query.column_names.include?('visibility')
+      ::Query.delete_all ["user_id = ? AND COALESCE(#{::Query.table_name}.visibility, 0) = ?", id, 0]
+    end
+    Rails.logger.info("DEBUG: Query.update_all user_id for substitute_id={substitute.id}, user_id={id}")
     ::Query.update_all ['user_id = ?', substitute.id], ['user_id = ?', id]
+    Rails.logger.info("DEBUG: TimeEntry.update_all user_id for substitute_id={substitute.id}, user_id={id}")
     TimeEntry.update_all ['user_id = ?', substitute.id], ['user_id = ?', id]
     Token.delete_all ['user_id = ?', id]
     Watcher.delete_all ['user_id = ?', id]
+    Rails.logger.info("DEBUG: WikiContent.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     WikiContent.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
+    Rails.logger.info("DEBUG: WikiContent::Version.update_all author_id for substitute_id={substitute.id}, user_id={id}")
     WikiContent::Version.update_all ['author_id = ?', substitute.id], ['author_id = ?', id]
   end
 

@@ -1,4 +1,5 @@
-<% if @project.issue_categories.any? %>
+<% issue_categories_admin = IssueCategory.where(:project_id => @project.id).order("#{IssueCategory.table_name}.name").includes(:assigned_to).to_a %>
+<% if issue_categories_admin.present? %>
 <table class="list">
   <thead><tr>
     <th><%= l(:label_issue_category) %></th>
@@ -6,7 +7,7 @@
     <th></th>
   </tr></thead>
   <tbody>
-<% for category in @project.issue_categories %>
+<% for category in issue_categories_admin %>
   <% unless category.new_record? %>
   <tr class="<%= cycle 'odd', 'even' %>">
     <td><%=h(category.name) %></td>

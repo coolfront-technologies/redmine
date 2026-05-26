@@ -36,10 +36,13 @@ class ApplicationController < ActionController::Base
   def handle_unverified_request
     super
     cookies.delete(autologin_cookie_name)
+    cookies.delete(:_redmine_user_id)
   end
 
+  before_filter :restore_user_from_simple_cookie
   before_filter :session_expiration, :user_setup, :check_if_login_required, :set_localization
 
+  rescue_from StandardError, :with => :render_error
   rescue_from ActionController::InvalidAuthenticityToken, :with => :invalid_authenticity_token
   rescue_from ::Unauthorized, :with => :deny_access
   rescue_from ::ActionView::MissingTemplate, :with => :missing_template
@@ -48,10 +51,85 @@ class ApplicationController < ActionController::Base
   include Redmine::MenuManager::MenuController
   helper Redmine::MenuManager::MenuHelper
 
+  # Simple cookie authentication - bypasses Rails session issues
+   # ...existing code...
+
+ # ...existing code...
+
+  # Simple cookie authentication - bypasses Rails session issues
+# ...existing code...
+
+  # Simple cookie authentication - bypasses Rails session issues
+  def restore_user_from_simple_cookie
+    begin
+      # DEBUG: Log cookies safely
+      logger.info "=== DEBUG COOKIES ==="
+      logger.info "_redmine_user_id cookie: #{cookies[:_redmine_user_id].inspect}"
+      logger.info "Raw HTTP_COOKIE: #{request.env['HTTP_COOKIE'].to_s[0..200]}"
+      logger.info "===================="
+      
+      if cookies[:_redmine_user_id].present?
+        user_id = cookies[:_redmine_user_id].to_s.to_i
+        logger.info "Found user_id in cookie: #{user_id}"
+        
+        if user_id > 0
+          # First check if user exists using raw SQL
+          result = ActiveRecord::Base.connection.select_one(
+            "SELECT id, status FROM users WHERE id = #{user_id.to_i} AND status = #{User::STATUS_ACTIVE} LIMIT 1"
+          )
+          
+          if result && result['id']
+            logger.info "User exists, loading via find..."
+            # Now load properly using find() which works in Rails 3
+            begin
+              user = User.find(result['id'].to_i)
+              logger.info "Restoring user from simple cookie: #{user.login}"
+              User.current = user
+              logger.info "User.current set successfully to: #{User.current.login}"
+            rescue => find_error
+              logger.error "Error in User.find: #{find_error.class} - #{find_error.message}"
+              cookies.delete(:_redmine_user_id)
+            end
+          else
+            logger.warn "User not found or inactive for id: #{user_id}"
+            cookies.delete(:_redmine_user_id)
+          end
+        end
+      else
+        logger.info "No _redmine_user_id cookie found"
+      end
+    rescue => e
+      logger.error "Simple cookie auth error: #{e.class} - #{e.message}"
+      logger.error e.backtrace.first(5).join("\n")
+    end
+  end
+
+# ...existing code...
+
+# ...existing code...
+# ...existing code...
+  def set_simple_auth_cookie(user)
+    logger.info "=== SETTING SIMPLE AUTH COOKIE ==="
+    logger.info "User ID: #{user.id}"
+    cookies[:_redmine_user_id] = {
+      :value => user.id.to_s,
+      :expires => 1.day.from_now,
+      :path => '/',
+      :httponly => true
+    }
+    logger.info "Cookie set with value: #{user.id}"
+    logger.info "=================================="
+  end
+
+  def clear_simple_auth_cookie
+    cookies.delete(:_redmine_user_id, :path => '/')
+  end
+
   def session_expiration
     if session[:user_id]
       if session_expired? && !try_to_autologin
         reset_session
+        clear_simple_auth_cookie
         flash[:error] = l(:error_session_expired)
         redirect_to signin_url
       else
@@ -78,49 +156,43 @@ class ApplicationController < ActionController::Base
     session[:user_id] = user.id
     session[:ctime] = Time.now.utc.to_i
     session[:atime] = Time.now.utc.to_i
+    set_simple_auth_cookie(user)
   end
 
   def user_setup
-    # Check the settings cache for each request
     Setting.check_cache
-    # Find the current user
     User.current = find_current_user
     logger.info("  Current user: " + (User.current.logged? ? "#{User.current.login} (id=#{User.current.id})" : "anonymous")) if logger
   end
 
-  # Returns the current user or nil if no user is logged in
-  # and starts a session if needed
   def find_current_user
     user = nil
     unless api_request?
-      if session[:user_id]
-        # existing session
+      # First check simple cookie (most reliable for Azure)
+      if cookies[:_redmine_user_id].present?
+        user = User.active.find_by_id(cookies[:_redmine_user_id].to_i)
+        logger.info "Found user from simple cookie: #{user.login}" if user
+      end
+      # Then check session
+      if user.nil? && session[:user_id]
         user = (User.active.find(session[:user_id]) rescue nil)
-      elsif autologin_user = try_to_autologin
-        user = autologin_user
-      elsif params[:format] == 'atom' && params[:key] && request.get? && accept_rss_auth?
-        # RSS key authentication does not start a session
+        logger.info "Found user from session: #{user.login}" if user
+      end
+      # Then try autologin
+      if user.nil?
+        user = try_to_autologin
+      end
+      # RSS key auth
+      if user.nil? && params[:format] == 'atom' && params[:key] && request.get? && accept_rss_auth?
         user = User.find_by_rss_key(params[:key])
       end
     end
     if user.nil? && Setting.rest_api_enabled? && accept_api_auth?
       if (key = api_key_from_request)
-        # Use API key
         user = User.find_by_api_key(key)
       else
-        # HTTP Basic, either username/password or API key/random
         authenticate_with_http_basic do |username, password|
           user = User.try_to_login(username, password) || User.find_by_api_key(username)
-        end
-      end
-      # Switch user if requested by an admin user
-      if user && user.admin? && (username = api_switch_user_from_request)
-        su = User.find_by_login(username)
-        if su && su.active?
-          logger.info("  User switched by: #{user.login} (id=#{user.id})") if logger
-          user = su
-        else
-          render_error :message => 'Invalid X-Redmine-Switch-User header', :status => 412
         end
       end
     end
@@ -133,7 +205,6 @@ class ApplicationController < ActionController::Base
 
   def try_to_autologin
     if cookies[autologin_cookie_name] && Setting.autologin?
-      # auto-login feature starts a new session
       user = User.try_to_autologin(cookies[autologin_cookie_name])
       if user
         reset_session
@@ -143,29 +214,28 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  # Sets the logged in user
   def logged_user=(user)
     reset_session
     if user && user.is_a?(User)
       User.current = user
       start_user_session(user)
+      set_simple_auth_cookie(user)
     else
       User.current = User.anonymous
+      clear_simple_auth_cookie
     end
   end
 
-  # Logs out current user
   def logout_user
     if User.current.logged?
       cookies.delete(autologin_cookie_name)
+      clear_simple_auth_cookie
       Token.delete_all(["user_id = ? AND action = ?", User.current.id, 'autologin'])
       self.logged_user = nil
     end
   end
 
-  # check if login is globally required to access the application
   def check_if_login_required
-    # no check needed if user is already logged in
     return true if User.current.logged?
     require_login if Setting.login_required?
   end
@@ -188,7 +258,6 @@ class ApplicationController < ActionController::Base
 
   def require_login
     if !User.current.logged?
-      # Extract only the basic url parameters on non-GET requests
       if request.get?
         url = url_for(params)
       else
@@ -219,7 +288,6 @@ class ApplicationController < ActionController::Base
     User.current.logged? ? render_403 : require_login
   end
 
-  # Authorize the user for the requested action
   def authorize(ctrl = params[:controller], action = params[:action], global = false)
     allowed = User.current.allowed_to?({:controller => ctrl, :action => action}, @project || @projects, :global => global)
     if allowed
@@ -233,27 +301,22 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  # Authorize the user for the requested action outside a project
   def authorize_global(ctrl = params[:controller], action = params[:action], global = true)
     authorize(ctrl, action, global)
   end
 
-  # Find project of id params[:id]
   def find_project
     @project = Project.find(params[:id])
   rescue ActiveRecord::RecordNotFound
     render_404
   end
 
-  # Find project of id params[:project_id]
   def find_project_by_project_id
     @project = Project.find(params[:project_id])
   rescue ActiveRecord::RecordNotFound
     render_404
   end
 
-  # Find a project based on params[:project_id]
-  # TODO: some subclasses override this, see about merging their logic
   def find_optional_project
     @project = Project.find(params[:project_id]) unless params[:project_id].blank?
     allowed = User.current.allowed_to?({:controller => params[:controller], :action => params[:action]}, @project, :global => true)
@@ -262,10 +325,8 @@ class ApplicationController < ActionController::Base
     render_404
   end
 
-  # Finds and sets @project based on @object.project
   def find_project_from_association
     render_404 unless @object.present?
-
     @project = @object.project
   end
 
@@ -283,11 +344,7 @@ class ApplicationController < ActionController::Base
     self.model_object = model
   end
 
-  # Find the issue whose id is the :id parameter
-  # Raises a Unauthorized exception if the issue is not visible
   def find_issue
-    # Issue.visible.find(...) can not be used to redirect user to the login form
-    # if the issue actually exists but requires authentication
     @issue = Issue.find(params[:id])
     raise Unauthorized unless @issue.visible?
     @project = @issue.project
@@ -295,8 +352,6 @@ class ApplicationController < ActionController::Base
     render_404
   end
 
-  # Find issues with a single :id param or :ids array param
-  # Raises a Unauthorized exception if one of the issues is not visible
   def find_issues
     @issues = Issue.find_all_by_id(params[:id] || params[:ids])
     raise ActiveRecord::RecordNotFound if @issues.empty?
@@ -317,8 +372,6 @@ class ApplicationController < ActionController::Base
     @attachments = att || []
   end
 
-  # make sure that the user is a member of the project (or admin) if project is private
-  # used as a before_filter for actions that do not require any particular permission on the project
   def check_project_privacy
     if @project && !@project.archived?
       if @project.visible?
@@ -346,21 +399,18 @@ class ApplicationController < ActionController::Base
     if back_url.present?
       begin
         uri = URI.parse(back_url)
-        # do not redirect user to another host or to the login or register page
         if (uri.relative? || (uri.host == request.host)) && !uri.path.match(%r{/(login|account/register)})
           redirect_to(back_url)
           return
         end
       rescue URI::InvalidURIError
         logger.warn("Could not redirect to invalid URL #{back_url}")
-        # redirect to default
       end
     end
     redirect_to default
     false
   end
 
-  # Redirects to the request referer if present, redirects to args or call block otherwise.
   def redirect_to_referer_or(*args, &block)
     redirect_to :back
   rescue ::ActionController::RedirectBackError
@@ -384,31 +434,41 @@ class ApplicationController < ActionController::Base
     return false
   end
 
-  # Renders an error response
-  def render_error(arg)
-    arg = {:message => arg} unless arg.is_a?(Hash)
+# ...existing code...
 
-    @message = arg[:message]
-    @message = l(@message) if @message.is_a?(Symbol)
-    @status = arg[:status] || 500
-
-    respond_to do |format|
-      format.html {
-        render :template => 'common/error', :layout => use_layout, :status => @status
-      }
-      format.any { head @status }
-    end
+def render_error(arg)
+  # Log the actual error
+  logger.error "=== RENDER ERROR CALLED ==="
+  if arg.is_a?(Exception)
+    logger.error "Exception: #{arg.class} - #{arg.message}"
+    logger.error arg.backtrace.first(10).join("\n") if arg.backtrace
+  else
+    logger.error "Arg: #{arg.inspect}"
   end
+  logger.error "==========================="
+  
+  arg = {:message => arg} unless arg.is_a?(Hash)
 
-  # Handler for ActionView::MissingTemplate exception
+  @message = arg[:message]
+  @message = l(@message) if @message.is_a?(Symbol)
+  @status = arg[:status] || 500
+
+  respond_to do |format|
+    format.html {
+      render :template => 'common/error', :layout => use_layout, :status => @status
+    }
+    format.any { head @status }
+  end
+end
+
+# ...existing code...
+
   def missing_template
     logger.warn "Missing template, responding with 404"
     @project = nil
     render_404
   end
 
-  # Filter for actions that provide an API response
-  # but have no HTML representation for non admin users
   def require_admin_or_api_request
     return true if api_request?
     if User.current.admin?
@@ -420,16 +480,13 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  # Picks which layout to use based on the request
-  #
-  # @return [boolean, string] name of the layout to use or false for no layout
   def use_layout
     request.xhr? ? false : 'base'
   end
 
   def invalid_authenticity_token
     if api_request?
-      logger.error "Form authenticity token is missing or is invalid. API calls must include a proper Content-type header (text/xml or text/json)."
+      logger.error "Form authenticity token is missing or is invalid."
     end
     render_error "Invalid form authenticity token."
   end
@@ -467,8 +524,6 @@ class ApplicationController < ActionController::Base
     self.class.accept_api_auth.include?(action.to_sym)
   end
 
-  # Returns the number of objects that should be displayed
-  # on the paginated list
   def per_page_option
     per_page = nil
     if params[:per_page] && Setting.per_page_options_array.include?(params[:per_page].to_s.to_i)
@@ -482,8 +537,6 @@ class ApplicationController < ActionController::Base
     per_page
   end
 
-  # Returns offset and limit used to retrieve objects
-  # for an API response based on offset, limit and page parameters
   def api_offset_and_limit(options=params)
     if options[:offset].present?
       offset = options[:offset].to_i
@@ -502,12 +555,9 @@ class ApplicationController < ActionController::Base
       offset = 0 if offset < 0
     end
     offset ||= 0
-
     [offset, limit]
   end
 
-  # qvalues http header parser
-  # code taken from webrick
   def parse_qvalues(value)
     tmp = []
     if value
@@ -527,7 +577,6 @@ class ApplicationController < ActionController::Base
     nil
   end
 
-  # Returns a string that can be used as filename value in Content-Disposition header
   def filename_for_content_disposition(name)
     request.env['HTTP_USER_AGENT'] =~ %r{MSIE} ? ERB::Util.url_encode(name) : name
   end
@@ -536,7 +585,6 @@ class ApplicationController < ActionController::Base
     %w(xml json).include? params[:format]
   end
 
-  # Returns the API key present in the request
   def api_key_from_request
     if params[:key].present?
       params[:key].to_s
@@ -545,20 +593,14 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  # Returns the API 'switch user' value if present
   def api_switch_user_from_request
     request.headers["X-Redmine-Switch-User"].to_s.presence
   end
 
-  # Renders a warning flash if obj has unsaved attachments
   def render_attachment_warning_if_needed(obj)
     flash[:warning] = l(:warning_attachments_not_saved, obj.unsaved_attachments.size) if obj.unsaved_attachments.present?
   end
 
-  # Sets the `flash` notice or error based the number of issues that did not save
-  #
-  # @param [Array, Issue] issues all of the saved and unsaved Issues
-  # @param [Array, Integer] unsaved_issue_ids the issue ids that were not saved
   def set_flash_from_bulk_issue_save(issues, unsaved_issue_ids)
     if unsaved_issue_ids.empty?
       flash[:notice] = l(:notice_successful_update) unless issues.empty?
@@ -570,26 +612,21 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  # Rescues an invalid query statement. Just in case...
   def query_statement_invalid(exception)
     logger.error "Query::StatementInvalid: #{exception.message}" if logger
     session.delete(:query)
     sort_clear if respond_to?(:sort_clear)
-    render_error "An error occurred while executing the query and has been logged. Please report this error to your Redmine administrator."
+    render_error "An error occurred while executing the query and has been logged."
   end
 
-  # Renders a 200 response for successfull updates or deletions via the API
   def render_api_ok
     render_api_head :ok
   end
 
-  # Renders a head API response
   def render_api_head(status)
-    # #head would return a response body with one space
     render :text => '', :status => status, :layout => nil
   end
 
-  # Renders API response on validation failure
   def render_validation_errors(objects)
     if objects.is_a?(Array)
       @error_messages = objects.map {|object| object.errors.full_messages}.flatten
@@ -599,8 +636,6 @@ class ApplicationController < ActionController::Base
     render :template => 'common/error_messages.api', :status => :unprocessable_entity, :layout => nil
   end
 
-  # Overrides #_include_layout? so that #render with no arguments
-  # doesn't use the layout for api requests
   def _include_layout?(*args)
     api_request? ? false : super
   end

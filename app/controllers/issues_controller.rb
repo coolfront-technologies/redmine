@@ -409,6 +409,13 @@ class IssuesController < ApplicationController
     @issue.start_date ||= Date.today if Setting.default_issue_start_date_to_creation_date?
     @issue.safe_attributes = params[:issue]
 
+    # Workflow can make status_id read-only (hidden select); stale nil associations then break
+    # `issues/_attributes` which calls `@issue.status.name`. Re-sync defaults after mass-assign.
+    if @issue.new_record?
+      @issue.status ||= IssueStatus.default
+      @issue.priority ||= IssuePriority.default
+    end
+
     @priorities = IssuePriority.active
     @allowed_statuses = @issue.new_statuses_allowed_to(User.current, true)
     @available_watchers = (@issue.project.users.sort + @issue.watcher_users).uniq

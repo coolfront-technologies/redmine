@@ -211,6 +211,7 @@ module ApplicationHelper
   # The given collection may be a subset of the whole project tree
   # (eg. some intermediate nodes are private and can not be seen)
   def render_project_nested_lists(projects)
+    projects = projects.to_a.compact
     s = ''
     if projects.any?
       ancestors = []

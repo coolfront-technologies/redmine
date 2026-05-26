@@ -191,6 +191,49 @@ class Query < ActiveRecord::Base
     @is_for_all = project.nil?
   end
 
+  # Some production DBs were migrated to Redmine's newer schema: is_public was replaced
+  # by visibility (integer, 0 = private / same as only author, >0 = shared with others).
+  def is_public
+    cols = self.class.column_names
+    if cols.include?('is_public')
+      read_attribute(:is_public)
+    elsif cols.include?('visibility')
+      read_attribute(:visibility).to_i != 0
+    else
+      false
+    end
+  end
+
+  def is_public=(value)
+    cols = self.class.column_names
+    if cols.include?('is_public')
+      write_attribute(:is_public, value)
+    elsif cols.include?('visibility')
+      write_attribute(:visibility, ActiveRecord::ConnectionAdapters::Column.value_to_boolean(value) ? 2 : 0)
+    end
+  end
+
+  def is_public?
+    !!(is_public)
+  end
+
+  # Mass assignment from forms still sends is_public; strip it when only visibility exists.
+  def assign_attributes(new_attributes, options = {})
+    unless new_attributes.blank?
+      cols = self.class.column_names
+      if new_attributes.is_a?(Hash) && !cols.include?('is_public') && cols.include?('visibility')
+        attrs = new_attributes.dup.stringify_keys
+        if attrs.key?('is_public')
+          v = attrs.delete('is_public')
+          super(attrs, options)
+          self.is_public = v
+          return
+        end
+      end
+    end
+    super(new_attributes, options)
+  end
+
   # Builds the query from the given params
   def build_from_params(params)
     if params[:fields] || params[:f]
@@ -245,9 +288,9 @@ class Query < ActiveRecord::Base
   def editable_by?(user)
     return false unless user
     # Admin can edit them all and regular users can edit their private queries
-    return true if user.admin? || (!is_public && self.user_id == user.id)
+    return true if user.admin? || (!is_public? && self.user_id == user.id)
     # Members can not edit public queries that are for all project (only admin is allowed to)
-    is_public && !@is_for_all && user.allowed_to?(:manage_public_queries, project)
+    is_public? && !@is_for_all && user.allowed_to?(:manage_public_queries, project)
   end
 
   def trackers

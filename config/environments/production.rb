@@ -1,8 +1,26 @@
 # Settings specified here will take precedence over those in config/application.rb
 RedmineApp::Application.configure do
+
+  # Force Rails to recognize HTTPS requests behind Azure proxy
+  class Rack::Request
+    def ssl?
+      @env['HTTP_X_FORWARDED_PROTO'] == 'https' || @env['HTTPS'] == 'on'
+    end
+  end
+
+  # IMPORTANT: Trust Azure proxy to fix IP spoofing error
+  config.action_dispatch.trusted_proxies = %r{.*}
+
   # The production environment is meant for finished, "live" apps.
   # Code is not reloaded between requests
   config.cache_classes = true
+
+  # Log to STDOUT for Docker/Azure
+  config.logger = Logger.new(STDOUT)
+  config.logger.level = Logger::INFO
+
+  # Enable memory cache for sessions
+  config.cache_store = :memory_store
 
   #####
   # Customize the default logger (http://ruby-doc.org/core/classes/Logger.html)

@@ -35,11 +35,9 @@ platforms :jruby do
 end
 
 # Include database gems for the adapters found in the database
-gem "pg", ">= 0.11.0", :platforms => [:mri, :mingw]
+gem "pg", "~> 0.18.0", :platforms => [:mri, :mingw]
 gem "activerecord-jdbcpostgresql-adapter", :platforms => :jruby
 
-gem "mysql2", "~> 0.3.11", :platforms => [:mri, :mingw]
-gem "activerecord-jdbcmysql-adapter", :platforms => :jruby
 
 group :development do
   gem "rdoc", ">= 2.4.2"
@@ -63,3 +61,5 @@ Dir.glob File.expand_path("../plugins/*/Gemfile", __FILE__) do |file|
   puts "Loading #{file} ..." if $DEBUG # `ruby -d` or `bundle -v`
   instance_eval File.read(file)
 end
+
+eval_gemfile File.expand_path('plugins/redmine_s3/Gemfile', __dir__)
