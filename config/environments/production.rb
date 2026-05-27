@@ -3,6 +3,9 @@
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb
 
+  config.action_dispatch.trusted_proxies = [%r{.*}]
+  config.public_file_server.enabled = ENV['RAILS_SERVE_STATIC_FILES'].present?
+
   # Code is not reloaded between requests.
   config.cache_classes = true
 

@@ -78,6 +78,10 @@ else
 fi
 
 bundle exec rake generate_secret_token 2>/dev/null || true
+
+echo "Syncing plugin CSS/JS to public/plugin_assets..."
+bundle exec rake redmine:plugins:assets RAILS_ENV=production
+
 echo "Starting Rack server on port ${PORT:-3010}..."
 exec bundle exec rackup -o 0.0.0.0 -p "${PORT:-3010}" config.ru
 EOS

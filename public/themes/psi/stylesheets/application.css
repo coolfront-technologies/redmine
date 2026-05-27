@@ -1,5 +1,5 @@
-/* load the default Redmine stylesheet */
-@import url(../../../stylesheets/application.css);
+/* load the default Redmine stylesheet (absolute path works behind proxies/subpaths) */
+@import url(/stylesheets/application.css);
 
 /* add a logo in the header */
 #header {

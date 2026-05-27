@@ -28,6 +28,7 @@
 /public/themes/*
 !/public/themes/alternate
 !/public/themes/classic
+!/public/themes/psi
 !/public/themes/README
 /tmp/*
 /tmp/cache/*
