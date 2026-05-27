@@ -403,10 +403,12 @@ module ApplicationHelper
   # (eg. some intermediate nodes are private and can not be seen)
   def render_project_nested_lists(projects, &block)
     s = +''
+    projects = Array(projects).compact
     if projects.any?
       ancestors = []
       original_project = @project
       projects.sort_by(&:lft).each do |project|
+        next unless project
         # set the project environment to please macros.
         @project = project
         if ancestors.empty? || project.is_descendant_of?(ancestors.last)

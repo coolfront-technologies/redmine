@@ -111,7 +111,7 @@ class User < Principal
   validates_format_of :login, :with => /\A[a-z0-9_\-@\.]*\z/i
   validates_length_of :login, :maximum => LOGIN_LENGTH_LIMIT
   validates_length_of :firstname, :lastname, :maximum => 30
-  validates_length_of :identity_url, maximum: 255
+  validates_length_of :identity_url, maximum: 255, if: -> { identity_url_available? }
   validates_inclusion_of :mail_notification, :in => MAIL_NOTIFICATION_OPTIONS.collect(&:first), :allow_blank => true
   Setting::PASSWORD_CHAR_CLASSES.each do |k, v|
     validates_format_of :password, :with => v, :message => :"must_contain_#{k}", :allow_blank => true, :if => Proc.new {Setting.password_required_char_classes.include?(k)}
@@ -198,7 +198,24 @@ class User < Principal
     email_addresses.pluck(:address)
   end
 
+  def self.identity_url_available?
+    @identity_url_available = column_names.include?('identity_url') if @identity_url_available.nil?
+    @identity_url_available
+  end
+
+  def identity_url_available?
+    self.class.identity_url_available?
+  end
+
+  def identity_url
+    return nil unless identity_url_available?
+
+    read_attribute(:identity_url)
+  end
+
   def self.find_or_initialize_by_identity_url(url)
+    return User.new unless identity_url_available?
+
     user = where(:identity_url => url).first
     unless user
       user = User.new
@@ -208,6 +225,8 @@ class User < Principal
   end
 
   def identity_url=(url)
+    return unless identity_url_available?
+
     if url.blank?
       write_attribute(:identity_url, '')
     else
@@ -217,7 +236,6 @@ class User < Principal
         # Invalid url, don't save
       end
     end
-    self.read_attribute(:identity_url)
   end
 
   # Returns the user that matches provided login and password, or nil
@@ -797,8 +815,10 @@ class User < Principal
     'notified_project_ids',
     'language',
     'custom_field_values',
-    'custom_fields',
-    'identity_url')
+    'custom_fields')
+  safe_attributes(
+    'identity_url',
+    :if => lambda {|user, current_user| user.identity_url_available?})
   safe_attributes(
     'login',
     :if => lambda {|user, current_user| user.new_record?})

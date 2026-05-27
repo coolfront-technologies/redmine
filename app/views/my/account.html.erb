@@ -25,7 +25,7 @@
   <% unless @user.force_default_language? %>
   <p><%= f.select :language, lang_options_for_select %></p>
   <% end %>
-  <% if Setting.openid? %>
+  <% if Setting.openid? && User.identity_url_available? %>
   <p><%= f.text_field :identity_url  %></p>
   <% end %>
   <% if Setting.twofa? -%>
