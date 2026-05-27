@@ -1,0 +1,26 @@
+# Local Docker — Rails reads Postgres from DATABASE_URL (`/start.sh` writes config/database.yml with ERB ENV["DATABASE_URL"]).
+#
+# Compose loads `.env` for ${VAR} substitution and passes the file into the container via `env_file`.
+
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+    environment:
+      PORT: "3000"
+      DATABASE_URL: ${DATABASE_URL:-postgres://postgres:password@db:5432/myapp_development}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-development-secret-change-me}
+      # No SKIP_S3_BOOTSTRAP here — set in `.env` only for local runs without AWS (prod Azure leaves it unset).
+  db:
+    image: postgres:9.6
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: myapp_development
