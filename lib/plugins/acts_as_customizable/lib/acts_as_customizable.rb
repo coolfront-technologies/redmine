@@ -44,6 +44,7 @@ module Redmine
       module InstanceMethods
         def self.included(base)
           base.extend ClassMethods
+          base.send :alias_method_chain, :reload, :custom_fields
         end
 
         def available_custom_fields
@@ -164,7 +165,7 @@ module Redmine
           @custom_field_values_changed = true
         end
 
-        def reload(*args)
+        def reload_with_custom_fields(*args)
           @custom_field_values = nil
           @custom_field_values_changed = false
           super

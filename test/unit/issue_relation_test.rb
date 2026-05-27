@@ -39,6 +39,8 @@ class IssueRelationTest < ActiveSupport::TestCase
     User.current = nil
   end
 
+  include Redmine::I18n
+
   def test_create
     from = Issue.find(1)
     to = Issue.find(2)
@@ -172,6 +174,39 @@ class IssueRelationTest < ActiveSupport::TestCase
         :issue_from => child1, :issue_to => child2,
         :relation_type => IssueRelation::TYPE_PRECEDES
       )
+    assert r.valid?
+    assert r.save
+  end
+
+  def test_validates_circular_dependency_of_subtask
+    set_language_if_valid 'en'
+    issue1 = Issue.generate!
+    issue2 = Issue.generate!
+    IssueRelation.create!(
+      :issue_from => issue1, :issue_to => issue2,
+      :relation_type => IssueRelation::TYPE_PRECEDES
+    )
+    child = Issue.generate!(:parent_issue_id => issue2.id)
+    issue1.reload
+    child.reload
+
+    r = IssueRelation.new(
+          :issue_from => child, :issue_to => issue1,
+          :relation_type => IssueRelation::TYPE_PRECEDES
+        )
+    assert !r.save
+    assert_include 'This relation would create a circular dependency', r.errors.full_messages
+  end
+
+  def test_subtasks_should_allow_precedes_relation
+    parent = Issue.generate!
+    child1 = Issue.generate!(:parent_issue_id => parent.id)
+    child2 = Issue.generate!(:parent_issue_id => parent.id)
+
+    r = IssueRelation.new(
+          :issue_from => child1, :issue_to => child2,
+          :relation_type => IssueRelation::TYPE_PRECEDES
+        )
     assert r.valid?
     assert r.save
   end

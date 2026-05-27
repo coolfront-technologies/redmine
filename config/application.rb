@@ -54,6 +54,9 @@ module RedmineApp
     # Assets fix heroku
     #config.assets.initialize_on_precompile = false
 
+    # Assets fix heroku
+    config.assets.initialize_on_precompile = false
+
     config.action_mailer.perform_deliveries = false
 
     # Do not include all helpers
